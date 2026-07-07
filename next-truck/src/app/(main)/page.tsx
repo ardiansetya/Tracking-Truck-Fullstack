@@ -14,9 +14,10 @@ import { ClipboardCheck, Package, Route, Truck, Globe, ArrowUpRight, Activity, T
 import { BentoCard } from "@/components/shared/BentoCard";
 import { MotionWrapper } from "@/components/shared/MotionWrapper";
 import { cn } from "@/lib/utils";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 export default function Home() {
+  const [showAllLogs, setShowAllLogs] = useState(false);
   const { data: routes, isLoading: routesLoading } = useRoutes();
   const { data: trucks, isLoading: trucksLoading } = useTrucks();
   const { data: deliveries, isLoading: deliveriesLoading } = useDeliveriesActive();
@@ -209,7 +210,7 @@ export default function Home() {
       }
     }
 
-    return uniqueLogs.slice(0, 5);
+    return uniqueLogs;
   }, [deliveries, historyDeliveries, transits, transitPoints, cities, alerts, trucks, routes]);
 
   return (
@@ -302,7 +303,7 @@ export default function Home() {
                 Tidak Ada Aktivitas Baru
               </div>
             ) : (
-              activityLogs.map((log, i) => (
+              (showAllLogs ? activityLogs : activityLogs.slice(0, 5)).map((log, i, arr) => (
                 <div key={i} className="flex items-start gap-4 group cursor-default">
                   <div className="relative pt-1 flex flex-col items-center">
                      <div className={cn(
@@ -310,7 +311,7 @@ export default function Home() {
                        log.type === "alert" ? "bg-destructive animate-pulse" :
                        i === 0 ? "bg-primary animate-pulse" : "bg-muted-foreground/30"
                      )} />
-                     {i !== activityLogs.length - 1 && <div className="w-[1px] h-12 bg-border mt-1" />}
+                     {i !== arr.length - 1 && <div className="w-[1px] h-12 bg-border mt-1" />}
                   </div>
                   <div className="flex-1 pb-4">
                      <div className="flex items-center justify-between mb-1">
@@ -327,9 +328,14 @@ export default function Home() {
                 </div>
               ))
             )}
-            <button className="w-full py-3 rounded-2xl bg-secondary/50 text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:bg-secondary hover:text-foreground transition-all">
-              Lihat Selengkapnya
-            </button>
+            {activityLogs.length > 5 && (
+              <button
+                onClick={() => setShowAllLogs(!showAllLogs)}
+                className="w-full py-3 rounded-2xl bg-secondary/50 text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:bg-secondary hover:text-foreground transition-all"
+              >
+                {showAllLogs ? "Tampilkan Lebih Sedikit" : "Lihat Selengkapnya"}
+              </button>
+            )}
           </div>
         </BentoCard>
 
