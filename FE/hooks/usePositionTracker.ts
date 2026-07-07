@@ -17,6 +17,7 @@ interface UsePositionTrackerOptions {
   interval?: number; // Interval in milliseconds to send position updates
   useBackgroundTracking?: boolean; // Use background location service (works even when app is closed)
   distanceInterval?: number; // Distance in meters to trigger update (for background tracking)
+  deliveryId?: string; // Active delivery ID to send alerts for
 }
 
 interface UsePositionTrackerReturn {
@@ -56,7 +57,8 @@ export const usePositionTracker = (
     autoTrack = false,
     interval = 900000,
     useBackgroundTracking = false,
-    distanceInterval = 100
+    distanceInterval = 100,
+    deliveryId
   } = options; // Default 15 minutes
 
   const [isTracking, setIsTracking] = useState(false);
@@ -65,6 +67,7 @@ export const usePositionTracker = (
   const [lastSentAt, setLastSentAt] = useState<Date | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | number | null>(null);
   const locationRef = useRef<LocationData | null>(null); // Keep location in ref for immediate access
+  const hasSentFakeGpsAlert = useRef(false);
 
   const {
     location,
@@ -136,7 +139,23 @@ export const usePositionTracker = (
 
     if (currentLocation.mocked) {
       console.log("🚫 Fake GPS detected, skipping send");
+      if (deliveryId && !hasSentFakeGpsAlert.current) {
+        hasSentFakeGpsAlert.current = true;
+        api.post("/api/delivery/alert/send", {
+          type: "FAKE_GPS",
+          message: "Driver terdeteksi menggunakan aplikasi Fake GPS (Lokasi Palsu)!",
+          delivery_id: deliveryId
+        }).then(() => {
+          console.log("🚨 FAKE_GPS Alert sent to backend successfully!");
+        }).catch((err) => {
+          console.error("❌ Failed to send FAKE_GPS Alert to backend:", err);
+          hasSentFakeGpsAlert.current = false; // Allow retry on next interval
+        });
+      }
       return false;
+    } else {
+      // Reset state if driver turns off Fake GPS, so we alert again if re-enabled
+      hasSentFakeGpsAlert.current = false;
     }
 
     try {

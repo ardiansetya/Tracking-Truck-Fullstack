@@ -11,6 +11,7 @@ public enum DeliverAlertType {
     IDLE_OUTSIDE_ALLOWED_AREA, // Diam terlalu lama di titik acak
     ROUTE_DEVIATION, // Menyimpang dari rute resmi
     GPS_LOST,
+    FAKE_GPS,
 
     // Driver-initiated notifications
     TRAFFIC_DELAY,      // Heavy traffic causing delays

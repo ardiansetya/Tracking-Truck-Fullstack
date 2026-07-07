@@ -80,6 +80,7 @@ const DashboardDriver = () => {
   } = usePositionTracker({
     autoTrack: !!deliveriesData?.data, // Auto-start only when there is an active delivery
     interval: currentInterval,
+    deliveryId: deliveriesData?.data?.id, // Pass delivery ID to send Fake GPS alerts
   });
 
   const router = useRouter();
