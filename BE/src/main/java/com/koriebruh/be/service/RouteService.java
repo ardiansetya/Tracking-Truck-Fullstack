@@ -107,8 +107,7 @@ public class RouteService {
         Route route = routeRepository.findById(routeId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Route not found"));
 
-        route.setIsActive(false); // if status false mean "archived"
-        routeRepository.save(route);
+        routeRepository.delete(route);
         return "Route deleted successfully";
     }
 

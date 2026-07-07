@@ -51,14 +51,20 @@ export default function PengirimanPage() {
 
   const filteredData = useMemo(() => {
     if (!pengirimanData) return [];
+    if (!searchQuery.trim()) return pengirimanData;
 
+    const query = searchQuery.toLowerCase();
     return pengirimanData.filter((item) => {
-      const query = searchQuery.toLowerCase();
+      const driverName = (item.worker_name || "").toLowerCase();
+      const platNomor = (item.truck_plate || "").toLowerCase();
+      const kotaAsal = (item.start_city_name || "").toLowerCase();
+      const kotaTujuan = (item.end_city_name || "").toLowerCase();
+
       return (
-        item.id.toLowerCase().includes(query) ||
-        item.truck_id.toLowerCase().includes(query) ||
-        item.route_id.toLowerCase().includes(query) ||
-        item.worker_id.toLowerCase().includes(query)
+        driverName.includes(query) ||
+        platNomor.includes(query) ||
+        kotaAsal.includes(query) ||
+        kotaTujuan.includes(query)
       );
     });
   }, [pengirimanData, searchQuery]);

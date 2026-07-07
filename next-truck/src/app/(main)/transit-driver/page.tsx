@@ -52,7 +52,7 @@ export default function TransitDriverPage() {
   };
 
   const filteredData = useMemo(() => {
-    return transitData.filter((item) => {
+    const filtered = transitData.filter((item) => {
       const matchesSearch =
         item.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.delivery_id.toLowerCase().includes(searchQuery.toLowerCase());
@@ -63,6 +63,9 @@ export default function TransitDriverPage() {
 
       return matchesSearch && matchesStatus;
     });
+
+    // Sort descending by arrived_at (newest first)
+    return [...filtered].sort((a, b) => b.arrived_at - a.arrived_at);
   }, [transitData, searchQuery, selectedStatus]);
 
   const stats = useMemo(

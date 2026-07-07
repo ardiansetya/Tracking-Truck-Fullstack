@@ -17,10 +17,14 @@ public class AllDeliveryActiveResponse {
     private String id;
 
     private String workerId;
+    private String workerName;
 
     private String truckId;
+    private String truckPlate;
 
     private String routeId;
+    private String startCityName;
+    private String endCityName;
 
     private String addByOperatorId;
 

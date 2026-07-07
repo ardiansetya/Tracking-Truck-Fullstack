@@ -1,4 +1,5 @@
 import UpdateTransitPointModal from "@/components/shared/modal/UpdateTransitPointModal";
+import AlertDeleteTransitPoint from "@/components/shared/alert/AlertDeleteTransitPoint";
 import CityCell from "@/components/shared/CityCell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -140,6 +141,7 @@ export const createTransitTableColumns = (
       return (
         <div className="flex items-center justify-end gap-2">
           <UpdateTransitPointModal transitPointId={transitPoint.id} />
+          <AlertDeleteTransitPoint transitPointId={transitPoint.id} />
         </div>
       );
     },

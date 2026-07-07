@@ -59,8 +59,9 @@ export type UpdateProfileResponse = {
 }
 
 export type ChangePasswordRequest = {
-  old_password: string;
+  current_password: string;
   new_password: string;
+  confirm_password: string;
 }
 
 export type CreateUserRequest = {
@@ -75,8 +76,12 @@ export type CreateUserRequest = {
 export type DeliveryData = {
   id: string;
   worker_id: string;
+  worker_name?: string;
   truck_id: string;
+  truck_plate?: string;
   route_id: string;
+  start_city_name?: string;
+  end_city_name?: string;
   add_by_operator_id: string;
   started_at: number;
   finished_at?: number;

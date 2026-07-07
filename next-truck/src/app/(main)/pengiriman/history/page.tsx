@@ -72,12 +72,21 @@ export default function HistoryPage() {
 
   const filteredData = useMemo(() => {
     if (!historyData) return [];
+    if (!searchQuery.trim()) return historyData;
+
+    const q = searchQuery.toLowerCase();
     return historyData.filter((item) => {
-      const q = searchQuery.toLowerCase();
-      return item.id.toLowerCase().includes(q) ||
-             item.truck_id.toLowerCase().includes(q) ||
-             item.route_id.toLowerCase().includes(q) ||
-             item.worker_id.toLowerCase().includes(q);
+      const driverName = (item.worker_name || "").toLowerCase();
+      const platNomor = (item.truck_plate || "").toLowerCase();
+      const kotaAsal = (item.start_city_name || "").toLowerCase();
+      const kotaTujuan = (item.end_city_name || "").toLowerCase();
+
+      return (
+        driverName.includes(q) ||
+        platNomor.includes(q) ||
+        kotaAsal.includes(q) ||
+        kotaTujuan.includes(q)
+      );
     });
   }, [historyData, searchQuery]);
 

@@ -5,10 +5,11 @@ import { useQuery } from "@tanstack/react-query";
 // Get tracking positions by delivery ID
 export const useTrackingPositions = (
   deliveryId: string,
+  refetchInterval: number = 900000, // Default 15 minutes
   enabled: boolean = true
 ) => {
   return useQuery({
-    queryKey: ["tracking", deliveryId],
+    queryKey: ["tracking", deliveryId, refetchInterval],
     queryFn: async () => {
       const response = await axiosInstance.get<ApiResponse<Position[]>>(
         `/api/delivery/positions/${deliveryId}`
@@ -16,8 +17,8 @@ export const useTrackingPositions = (
       return response.data.data;
     },
     enabled: !!deliveryId && enabled,
-    staleTime: 15 * 60 * 1000, // 15 minutes - matches backend update frequency
-    refetchInterval: 15 * 60 * 1000, // Auto refetch every 15 minutes (same as backend)
+    staleTime: 0, // Always consider data stale to allow immediate refetch
+    refetchInterval: refetchInterval, // Dynamic auto-refetch interval
     refetchIntervalInBackground: true, // Continue refetching in background
     refetchOnWindowFocus: true, // Refetch when window regains focus
   });

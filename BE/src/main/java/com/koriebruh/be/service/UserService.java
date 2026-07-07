@@ -144,6 +144,42 @@ public class UserService {
                 .build();
     }
 
+    // UPDATE USER BY ID
+    public UserResponse updateUser(String userId, ProfileRequest request) {
+        validationService.validate(request);
+
+        User user = userRepository.findByIdAndDeletedAtIsNull(userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+
+        if (request.getEmail() != null && !request.getEmail().equals(user.getEmail())) {
+            if (userRepository.existsByEmail(request.getEmail())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email already exists");
+            }
+            user.setEmail(request.getEmail());
+        }
+
+        if (request.getUsername() != null && !request.getUsername().equals(user.getUsername())) {
+            if (userRepository.existsByUsername(request.getUsername())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Username already exists");
+            }
+            user.setUsername(request.getUsername());
+        }
+
+        user.setPhoneNumber(request.getPhoneNumber());
+        user.setAge(request.getAge());
+        user.setUpdatedAt(Instant.now().getEpochSecond());
+        userRepository.save(user);
+
+        return UserResponse.builder()
+                .id(user.getId())
+                .username(user.getUsername())
+                .email(user.getEmail())
+                .phoneNumber(user.getPhoneNumber())
+                .age(user.getAge())
+                .role(user.getRole().name())
+                .build();
+    }
+
     // DELETE USER
     public String deleteUser(String id) {
         User user = userRepository.findByIdAndDeletedAtIsNull(id)
@@ -162,7 +198,7 @@ public class UserService {
         if (!queryRole.equalsIgnoreCase("OPERATOR") && !queryRole.equalsIgnoreCase("DRIVER")) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid role type. Only USER or DRIVER are allowed.");
         }
-        List<User> users = userRepository.findAllByRoleAndDeletedAtIsNull(RoleType.valueOf(queryRole.toUpperCase()));
+        List<User> users = userRepository.findAllByRoleAndDeletedAtIsNullOrderByCreatedAtDesc(RoleType.valueOf(queryRole.toUpperCase()));
 
         if (users.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "make sure role Type is correct and user exists");

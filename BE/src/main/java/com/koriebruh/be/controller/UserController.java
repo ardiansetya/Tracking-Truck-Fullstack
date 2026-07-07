@@ -100,6 +100,20 @@ public class UserController {
         );
     }
 
+    @PutMapping(
+            value = "/{userId}",
+            produces = "application/json"
+    )
+    public ResponseEntity<WebResponse<UserResponse>> updateUser(@PathVariable String userId, @RequestBody @Valid ProfileRequest userUpdate) {
+        UserResponse response = userService.updateUser(userId, userUpdate);
+        return ResponseEntity.ok(
+                WebResponse.<UserResponse>builder()
+                        .status("OK")
+                        .data(response)
+                        .build()
+        );
+    }
+
     @DeleteMapping(value = "/{userId}",
             produces = "application/json"
     )

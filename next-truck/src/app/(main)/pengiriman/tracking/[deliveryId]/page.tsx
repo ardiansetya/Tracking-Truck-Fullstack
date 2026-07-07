@@ -7,7 +7,7 @@ import { ArrowLeft, MapPin, Clock, Navigation, RefreshCw, Database, Globe, Zap, 
 import { Skeleton } from "@/components/ui/skeleton";
 import { useTrackingPositions, useDelivery, useTrucks } from "@/hooks";
 import { useQueryClient } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { MotionWrapper } from "@/components/shared/MotionWrapper";
 import { BentoCard } from "@/components/shared/BentoCard";
 import { cn } from "@/lib/utils";
@@ -31,12 +31,30 @@ export default function TrackingPage() {
   const deliveryId = params.deliveryId as string;
   const queryClient = useQueryClient();
 
+  const [isDemoMode, setIsDemoMode] = useState<boolean>(false);
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+    const stored = localStorage.getItem("admin_demo_mode");
+    if (stored !== null) {
+      setIsDemoMode(stored === "true");
+    }
+  }, []);
+
+  const toggleDemoMode = (val: boolean) => {
+    setIsDemoMode(val);
+    localStorage.setItem("admin_demo_mode", String(val));
+  };
+
+  const refetchInterval = isDemoMode ? 10000 : 900000;
+
   const {
     data: trackingData,
     isLoading: loading,
     isFetching: fetching,
     refetch,
-  } = useTrackingPositions(deliveryId);
+  } = useTrackingPositions(deliveryId, refetchInterval);
 
   const { data: deliveryData } = useDelivery(deliveryId);
   const { data: trucks } = useTrucks();
@@ -95,9 +113,67 @@ export default function TrackingPage() {
   const exportToCSV = () => {
     if (positions.length === 0) return;
 
-    const headers = ["No", "Nama Lokasi", "Alamat Lengkap", "Kota", "Provinsi", "Negara", "Latitude", "Longitude", "Waktu Rekam"];
+    const csvRows = [
+      "sep=,", // Force Microsoft Excel to use comma as the column delimiter
+      "DETAIL PENGIRIMAN",
+      `ID Pengiriman,"${deliveryId}"`,
+      `Nomor Plat Truk,"${(truckPlate || "-").replace(/"/g, '""')}"`,
+      `ID Driver,"${(deliveryData?.worker_id || "-").replace(/"/g, '""')}"`,
+      `ID Rute,"${(deliveryData?.route_id || "-").replace(/"/g, '""')}"`,
+      `Waktu Mulai,"${deliveryData?.started_at ? new Date(deliveryData.started_at * 1000).toLocaleString("id-ID") : "-"}"`,
+      `Waktu Selesai,"${deliveryData?.finished_at ? new Date(deliveryData.finished_at * 1000).toLocaleString("id-ID") : "-"}"`,
+      "",
+      "KENDALA / PERINGATAN PERJALANAN (ALERTS)",
+    ];
+
+    const alertHeaders = ["No", "Tipe Kendala", "Pesan Kendala", "Waktu Kejadian"];
+    csvRows.push(alertHeaders.join(","));
+
+    const alerts = deliveryData?.alerts || [];
+    if (alerts.length === 0) {
+      csvRows.push("-,Tidak ada kendala terdeteksi,-,-");
+    } else {
+      alerts.forEach((alert: any, index: number) => {
+        const translateAlert = (type: string) => {
+          const mapping: Record<string, string> = {
+            accident: "Kecelakaan",
+            breakdown: "Mogok",
+            canceled: "Dibatalkan",
+            unauthorized_unloading: "Bongkar Ilegal",
+            illegal_stop: "Berhenti Ilegal",
+            route_deviation: "Keluar Rute",
+            fuel_issue: "Masalah BBM",
+            gps_lost: "GPS Hilang",
+            puncture: "Ban Bocor/Pecah",
+          };
+          return mapping[type.toLowerCase()] || type;
+        };
+
+        const waktu = new Date(alert.created_at * 1000).toLocaleString("id-ID", {
+          day: "2-digit",
+          month: "long",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        });
+
+        csvRows.push([
+          index + 1,
+          `"${translateAlert(alert.type).replace(/"/g, '""')}"`,
+          `"${(alert.message || "-").replace(/"/g, '""')}"`,
+          `"${waktu}"`
+        ].join(","));
+      });
+    }
+
+    csvRows.push("");
+    csvRows.push("RIWAYAT POSISI LOKASI (TRACKING)");
     
-    const rows = positions.map((pos: any, index: number) => {
+    const locationHeaders = ["No", "Nama Lokasi", "Alamat Lengkap", "Kota", "Provinsi", "Negara", "Latitude", "Longitude", "Waktu Rekam"];
+    csvRows.push(locationHeaders.join(","));
+
+    positions.forEach((pos: any, index: number) => {
       const waktu = new Date(pos.recorded_at * 1000).toLocaleString("id-ID", {
         day: "2-digit",
         month: "long",
@@ -107,20 +183,20 @@ export default function TrackingPage() {
         second: "2-digit",
       });
 
-      return [
+      csvRows.push([
         index + 1,
         `"${(pos.name || "-").replace(/"/g, '""')}"`,
         `"${(pos.formatted_address || "-").replace(/"/g, '""')}"`,
-        `"${pos.city || "-"}"`,
-        `"${pos.state || "-"}"`,
-        `"${pos.country || "-"}"`,
+        `"${(pos.city || "-").replace(/"/g, '""')}"`,
+        `"${(pos.state || "-").replace(/"/g, '""')}"`,
+        `"${(pos.country || "-").replace(/"/g, '""')}"`,
         pos.latitude,
         pos.longitude,
         `"${waktu}"`,
-      ].join(",");
+      ].join(","));
     });
 
-    const csvContent = "\uFEFF" + [headers.join(","), ...rows].join("\n");
+    const csvContent = "\uFEFF" + csvRows.join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -128,7 +204,7 @@ export default function TrackingPage() {
     
     const cleanPlate = truckPlate ? truckPlate.replace(/\s+/g, "-") : "truk";
     const cleanDate = deliveryDateStr || "tanggal";
-    link.download = `${cleanPlate}_${cleanDate}.csv`;
+    link.download = `${cleanPlate}_${cleanDate}_laporan.csv`;
 
     link.click();
     URL.revokeObjectURL(url);
@@ -162,6 +238,20 @@ export default function TrackingPage() {
         </div>
         
         <div className="flex items-center gap-4">
+          {isMounted && (
+            <Button
+              variant={isDemoMode ? "default" : "outline"}
+              size="lg"
+              onClick={() => toggleDemoMode(!isDemoMode)}
+              className={cn(
+                "rounded-2xl h-14 px-6 font-bold gap-3 transition-all",
+                isDemoMode ? "bg-amber-600 hover:bg-amber-500 text-white border-amber-600" : "bg-secondary/30 hover:bg-secondary"
+              )}
+            >
+              <Zap className={cn("h-5 w-5", isDemoMode && "text-yellow-300 animate-pulse")} />
+              {isDemoMode ? "Demo (10s)" : "Normal (15m)"}
+            </Button>
+          )}
           <div className="hidden sm:flex flex-col items-end gap-0.5 px-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
              <span>Pembaruan Terakhir</span>
              <span className="text-primary">{formatLastUpdated()}</span>

@@ -290,11 +290,11 @@ const UpdateRouteModal = ({ routeId }: { routeId: string }) => {
                 name="distance_km"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Jarak (KM)</FormLabel>
+                    <FormLabel>Jarak (KM) <span className="text-muted-foreground text-xs font-normal">(Opsional)</span></FormLabel>
                     <FormControl>
                       <Input
                         type="number"
-                        placeholder="150"
+                        placeholder="Dihitung otomatis jika kosong"
                         {...field}
                         onChange={(e) =>
                           field.onChange(parseFloat(e.target.value) || 0)
@@ -302,8 +302,8 @@ const UpdateRouteModal = ({ routeId }: { routeId: string }) => {
                         value={field.value || ""}
                       />
                     </FormControl>
-                    <p className="text-sm text-red-400">
-                      {form.formState.errors.distance_km?.message}
+                    <p className="text-[10px] text-muted-foreground">
+                      Dihitung otomatis berdasarkan titik koordinat kota asal & tujuan.
                     </p>
                   </FormItem>
                 )}
@@ -313,12 +313,12 @@ const UpdateRouteModal = ({ routeId }: { routeId: string }) => {
                 name="estimated_duration_hours"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Estimasi (Jam)</FormLabel>
+                    <FormLabel>Estimasi (Jam) <span className="text-muted-foreground text-xs font-normal">(Opsional)</span></FormLabel>
                     <FormControl>
                       <Input
                         type="number"
                         step="0.1"
-                        placeholder="3"
+                        placeholder="Dihitung otomatis jika kosong"
                         {...field}
                         onChange={(e) =>
                           field.onChange(parseFloat(e.target.value) || 0)
@@ -326,8 +326,8 @@ const UpdateRouteModal = ({ routeId }: { routeId: string }) => {
                         value={field.value || ""}
                       />
                     </FormControl>
-                    <p className="text-sm text-red-400">
-                      {form.formState.errors.estimated_duration_hours?.message}
+                    <p className="text-[10px] text-muted-foreground">
+                      Dihitung otomatis secara realistis jika dikosongkan.
                     </p>
                   </FormItem>
                 )}

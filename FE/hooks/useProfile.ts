@@ -105,6 +105,21 @@ export const useUpdateProfile = () => {
       console.error("Update profile error:", error);
     },
   });
+};
 
-  
+interface ChangePasswordData {
+  current_password?: string;
+  new_password?: string;
+  confirm_password?: string;
+}
+
+const changePassword = async (data: ChangePasswordData): Promise<any> => {
+  const response = await api.patch("/api/users/profile/password", data);
+  return response.data;
+};
+
+export const useChangePassword = () => {
+  return useMutation({
+    mutationFn: changePassword,
+  });
 };

@@ -22,8 +22,6 @@ public class TransitPointRequest {
     @Positive(message = "Unloading city ID must be a positive number")
     private Long unloadingCityId;
 
-    @NotNull(message = "Estimated duration must not be null")
-    @Min(value = 1, message = "Estimated duration must be at least 1 minute")
     private Long estimatedDurationMinute;
 
     @NotNull(message = "Cargo type must not be null")

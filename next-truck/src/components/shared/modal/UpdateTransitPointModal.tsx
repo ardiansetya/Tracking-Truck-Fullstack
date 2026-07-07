@@ -61,8 +61,8 @@ const UpdateTransitPointModal = ({ transitPointId }: { transitPointId: number })
   useEffect(() => {
     if (transitPoint && open) {
       form.reset({
-        loading_city_id: transitPoint.loading_city_id,
-        unloading_city_id: transitPoint.unloading_city_id,
+        loading_city_id: transitPoint.loading_city_id || (transitPoint as any).loading_city?.id || 0,
+        unloading_city_id: transitPoint.unloading_city_id || (transitPoint as any).unloading_city?.id || 0,
         estimated_duration_minute: transitPoint.estimated_duration_minute,
         cargo_type: transitPoint.cargo_type,
         extra_cost: transitPoint.extra_cost,
@@ -196,23 +196,19 @@ const UpdateTransitPointModal = ({ transitPointId }: { transitPointId: number })
               name="estimated_duration_minute"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Durasi Estimasi (menit)</FormLabel>
+                  <FormLabel>Durasi Estimasi (menit) <span className="text-muted-foreground text-xs font-normal">(Opsional)</span></FormLabel>
                   <FormControl>
                     <Input
                       type="number"
-                      placeholder="60"
+                      placeholder="Dihitung otomatis jika kosong"
                       {...field}
-                      onChange={(e) => field.onChange(e.target.valueAsNumber)}
+                      onChange={(e) => field.onChange(e.target.valueAsNumber || 0)}
+                      value={field.value || ""}
                     />
                   </FormControl>
                   <FormDescription>
-                    Estimasi waktu transit dalam menit
+                    Kosongkan jika ingin dihitung secara otomatis berdasarkan titik koordinat kota.
                   </FormDescription>
-                  {form.formState.errors.estimated_duration_minute && (
-                    <p className="text-sm text-red-500">
-                      {form.formState.errors.estimated_duration_minute.message}
-                    </p>
-                  )}
                 </FormItem>
               )}
             />

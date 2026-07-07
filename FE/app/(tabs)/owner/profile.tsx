@@ -188,6 +188,15 @@ const Profile = () => {
             </TouchableOpacity>
 
             <TouchableOpacity
+              className="bg-gray-800 h-12 rounded-xl justify-center items-center shadow-sm active:bg-gray-900 flex-row"
+              onPress={() => router.push("/profile/change-password")}>
+              <Ionicons name="key-outline" size={20} color="white" />
+              <Text className="text-white font-semibold text-base ml-2">
+                Ganti Password
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
               onPress={logout}
               className="bg-red-500 h-12 rounded-xl justify-center items-center shadow-sm active:bg-red-600 flex-row">
               <Ionicons name="log-out-outline" size={20} color="white" />

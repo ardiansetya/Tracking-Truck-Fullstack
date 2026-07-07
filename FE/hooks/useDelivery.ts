@@ -221,12 +221,12 @@ export const useDeliveryByWorker = (worker_id: string) => {
     staleTime: 20000, // Consider data stale after 20 seconds
   });
 };
-export const useDeliveryDetailsByWorker = () => {
+export const useDeliveryDetailsByWorker = (options?: { refetchInterval?: number }) => {
   return useQuery({
     queryKey: ["worker_deliveries" ],
     queryFn: fetchDeliveryByWorker,
-    // refetchInterval: 30000, // Refetch every 30 seconds
     staleTime: 20000, // Consider data stale after 20 seconds
+    ...options,
   });
 };
 

@@ -3,6 +3,7 @@
 import { ColumnDef } from "@tanstack/react-table";
 import { UserData } from "@/types/api";
 import { AlertDeleteUser } from "@/components/shared/alert/AlertDeleteUser";
+import UpdateUserModal from "@/components/shared/modal/UpdateUserModal";
 import { Button } from "@/components/ui/button";
 import { ArrowUpDown } from "lucide-react";
 
@@ -77,7 +78,12 @@ export const columns: ColumnDef<UserData>[] = [
     cell: ({ row }) => {
       const user = row.original;
 
-      return <AlertDeleteUser user={user} />;
+      return (
+        <div className="flex items-center gap-2">
+          <UpdateUserModal user={user} />
+          <AlertDeleteUser user={user} />
+        </div>
+      );
     },
   },
 ];

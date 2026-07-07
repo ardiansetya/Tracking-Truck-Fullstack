@@ -116,12 +116,15 @@ const DashboardDriver = () => {
     return () => clearInterval(countdownInterval);
   }, [isTracking, lastSentAt, currentInterval, isDemoMode]);
 
-  // Handle location errors with automatic retry
+  // Handle location errors with alert dialog
   useEffect(() => {
     if (locationError) {
       console.error("Location error detected:", locationError);
-      // Just log the error, don't show alert for automatic system
-      // The system will automatically retry in the next interval
+      Alert.alert(
+        "🚨 Layanan GPS Bermasalah",
+        "Aplikasi mendeteksi bahwa GPS Anda dinonaktifkan atau izin lokasi ditolak. Aktifkan kembali GPS/Lokasi HP Anda untuk melanjutkan pelacakan.",
+        [{ text: "OK" }]
+      );
     }
   }, [locationError]);
 
@@ -220,6 +223,16 @@ const DashboardDriver = () => {
               <Ionicons name="alert-circle" size={20} color="#DC2626" />
               <Text className="text-red-700 font-medium ml-2">
                 Fake GPS terdeteksi! Nonaktifkan segera 🚨
+              </Text>
+            </View>
+          )}
+
+          {/* GPS Disabled Warning Banner */}
+          {locationError && (
+            <View className="bg-red-100 border border-red-400 rounded-xl p-3 mb-4 flex-row items-center">
+              <Ionicons name="alert-circle" size={20} color="#DC2626" />
+              <Text className="text-red-700 font-medium ml-2 flex-1">
+                Layanan GPS mati atau izin ditolak! Aktifkan GPS untuk melanjutkan pelacakan. 🚨
               </Text>
             </View>
           )}

@@ -41,7 +41,7 @@ const CreateTransitPointModal = () => {
     defaultValues: {
       loading_city_id: 0,
       unloading_city_id: 0,
-      estimated_duration_minute: 1,
+      estimated_duration_minute: 0,
       cargo_type: "",
       extra_cost: 0,
       is_active: true,
@@ -186,23 +186,19 @@ const CreateTransitPointModal = () => {
               name="estimated_duration_minute"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Durasi Estimasi (menit)</FormLabel>
+                  <FormLabel>Durasi Estimasi (menit) <span className="text-muted-foreground text-xs font-normal">(Opsional)</span></FormLabel>
                   <FormControl>
                     <Input
                       type="number"
-                      placeholder="60"
+                      placeholder="Dihitung otomatis jika kosong"
                       {...field}
-                      onChange={(e) => field.onChange(e.target.valueAsNumber)}
+                      onChange={(e) => field.onChange(e.target.valueAsNumber || 0)}
+                      value={field.value || ""}
                     />
                   </FormControl>
                   <FormDescription>
-                    Estimasi waktu transit dalam menit
+                    Kosongkan jika ingin dihitung secara otomatis berdasarkan titik koordinat kota.
                   </FormDescription>
-                  {form.formState.errors.estimated_duration_minute && (
-                    <p className="text-sm text-red-500">
-                      {form.formState.errors.estimated_duration_minute.message}
-                    </p>
-                  )}
                 </FormItem>
               )}
             />

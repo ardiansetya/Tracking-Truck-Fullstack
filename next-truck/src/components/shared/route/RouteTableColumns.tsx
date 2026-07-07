@@ -1,4 +1,5 @@
 import UpdateRouteModal from "@/components/shared/modal/UpdateRouteModal";
+import AlertDeleteRoute from "@/components/shared/alert/AlertDeleteRoute";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { RouteData } from "@/types/api";
@@ -173,6 +174,10 @@ export const createRouteTableColumns = (
             <span className="sr-only">Detail</span>
           </Button>
           <UpdateRouteModal routeId={route.id} />
+          <AlertDeleteRoute
+            routeId={route.id}
+            routeName={`${route.start_city_name} ➔ ${route.end_city_name}`}
+          />
         </div>
       );
     },

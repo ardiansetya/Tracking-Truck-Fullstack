@@ -26,5 +26,5 @@ public interface UserRepository extends JpaRepository<User, String> {
 
     Optional<User> findByRefreshToken(String refreshToken);
 
-    List<User> findAllByRoleAndDeletedAtIsNull(RoleType role);
+    List<User> findAllByRoleAndDeletedAtIsNullOrderByCreatedAtDesc(RoleType role);
 }

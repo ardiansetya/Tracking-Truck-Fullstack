@@ -15,7 +15,8 @@ export const useRoutes = () => {
       const response = await axiosInstance.get<ApiResponse<RouteData[]>>(
         "/api/routes"
       );
-      return response.data.data;
+      const data = response.data.data || [];
+      return [...data].sort((a, b) => b.created_at - a.created_at);
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
   });

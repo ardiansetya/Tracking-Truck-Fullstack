@@ -18,7 +18,8 @@ export const useDeliveriesActive = () => {
       const response = await axiosInstance.get<ApiResponse<DeliveryData[]>>(
         "/api/delivery/active"
       );
-      return response.data.data;
+      const data = response.data.data || [];
+      return [...data].sort((a, b) => b.started_at - a.started_at);
     },
     staleTime: 1 * 60 * 1000, // 1 minute
   });
@@ -30,7 +31,8 @@ export const useHistoryDeliveries = () => {
       const response = await axiosInstance.get<ApiResponse<DeliveryData[]>>(
         "/api/delivery/history"
       );
-      return response.data.data;
+      const data = response.data.data || [];
+      return [...data].sort((a, b) => b.started_at - a.started_at);
     },
     staleTime: 1 * 60 * 1000, // 1 minute
   });

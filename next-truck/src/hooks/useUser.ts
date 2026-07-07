@@ -155,6 +155,47 @@ export const useDeleteUser = () => {
   });
 };
 
+// Update user (admin)
+export const useUpdateUser = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      userId,
+      data,
+    }: {
+      userId: string;
+      data: {
+        username: string;
+        email: string;
+        phone_number: string;
+        age: number;
+      };
+    }) => {
+      const response = await axiosInstance.put<ApiResponse<UserData>>(
+        `/api/users/${userId}`,
+        data
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+      queryClient.invalidateQueries({ queryKey: ["drivers", "available"] });
+      queryClient.invalidateQueries({ queryKey: ["drivers", "all"] });
+      toast.success("Driver berhasil diperbarui");
+    },
+    onError: (error) => {
+      console.error("Error updating user:", error);
+      const axiosError = error as {
+        response?: { status?: number; data?: { message?: string } };
+      };
+      const errorMessage =
+        axiosError.response?.data?.message || "Gagal memperbarui driver";
+      toast.error(errorMessage);
+    },
+  });
+};
+
 // Update current user profile
 export const useUpdateProfile = () => {
   const queryClient = useQueryClient();

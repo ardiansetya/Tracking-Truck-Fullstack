@@ -7,6 +7,8 @@ import com.koriebruh.be.entity.City;
 import com.koriebruh.be.entity.TransitPoint;
 import com.koriebruh.be.repository.CityRepository;
 import com.koriebruh.be.repository.TransitPointRepository;
+import com.koriebruh.be.utils.Estimation;
+import com.koriebruh.be.utils.GeoUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -47,7 +49,20 @@ public class TransitPointService {
         TransitPoint transitPoint = new TransitPoint();
         transitPoint.setLoadingCity(loadingCity);
         transitPoint.setUnloadingCity(unloadingCity);
-        transitPoint.setEstimatedDurationMinute(request.getEstimatedDurationMinute());
+
+        Long duration = request.getEstimatedDurationMinute();
+        if (duration == null || duration <= 0) {
+            Double distanceKM = GeoUtils.calculateDistance(
+                    loadingCity.getLatitude(),
+                    loadingCity.getLongitude(),
+                    unloadingCity.getLatitude(),
+                    unloadingCity.getLongitude()
+            );
+            Double estimatedDurationHours = Estimation.calculateRealisticTravelTime(distanceKM);
+            duration = Math.round(estimatedDurationHours * 60.0);
+        }
+
+        transitPoint.setEstimatedDurationMinute(duration);
         transitPoint.setCargoType(request.getCargoType());
         transitPoint.setExtraCost(request.getExtraCost());
         transitPoint.setCreatedAt(Instant.now().toEpochMilli());
@@ -72,7 +87,20 @@ public class TransitPointService {
         // Update fields
         existingTransitPoint.setLoadingCity(loadingCity);
         existingTransitPoint.setUnloadingCity(unloadingCity);
-        existingTransitPoint.setEstimatedDurationMinute(request.getEstimatedDurationMinute());
+
+        Long duration = request.getEstimatedDurationMinute();
+        if (duration == null || duration <= 0) {
+            Double distanceKM = GeoUtils.calculateDistance(
+                    loadingCity.getLatitude(),
+                    loadingCity.getLongitude(),
+                    unloadingCity.getLatitude(),
+                    unloadingCity.getLongitude()
+            );
+            Double estimatedDurationHours = Estimation.calculateRealisticTravelTime(distanceKM);
+            duration = Math.round(estimatedDurationHours * 60.0);
+        }
+
+        existingTransitPoint.setEstimatedDurationMinute(duration);
         existingTransitPoint.setExtraCost(request.getExtraCost());
         existingTransitPoint.setCargoType(request.getCargoType());
         existingTransitPoint.setIsActive(request.getIsActive() != null ? request.getIsActive() : true); // Default to true if null
@@ -86,8 +114,7 @@ public class TransitPointService {
         TransitPoint existingTransitPoint = transitPointRepository.findById(id).orElseThrow(() ->
                 new ResponseStatusException(HttpStatus.NOT_FOUND, "Transit Point not found with id: " + id));
 
-        existingTransitPoint.setIsActive(false);
-        transitPointRepository.save(existingTransitPoint);
+        transitPointRepository.delete(existingTransitPoint);
 
         return "Transit Point deleted successfully";
     }

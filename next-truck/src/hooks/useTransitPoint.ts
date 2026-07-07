@@ -13,7 +13,8 @@ export const useTransitPoints = () => {
       const response = await axiosInstance.get<ApiResponse<TransitPointData[]>>(
         "/api/transit-points"
       );
-      return response.data.data;
+      const data = response.data.data || [];
+      return [...data].sort((a, b) => b.id - a.id);
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
   });

@@ -25,12 +25,21 @@ public class TransitPointController {
     @GetMapping(value = "/{id}",
             produces = "application/json"
     )
-    public ResponseEntity<WebResponse<TransitPoint>> getTransitPointById(@PathVariable Long id) {
-        TransitPoint transitPoint = transitPointService.getTransitPointById(id);
+    public ResponseEntity<WebResponse<TransitPointResponse>> getTransitPointById(@PathVariable Long id) {
+        TransitPoint tp = transitPointService.getTransitPointById(id);
+        TransitPointResponse response = TransitPointResponse.builder()
+                .id(tp.getId())
+                .loadingCityId(tp.getLoadingCity().getId())
+                .unloadingCityId(tp.getUnloadingCity().getId())
+                .estimatedDurationMinute(tp.getEstimatedDurationMinute())
+                .cargoType(tp.getCargoType())
+                .extraCost(tp.getExtraCost())
+                .isActive(tp.getIsActive())
+                .build();
         return ResponseEntity.ok(
-                WebResponse.<TransitPoint>builder()
+                WebResponse.<TransitPointResponse>builder()
                         .status("OK")
-                        .data(transitPoint)
+                        .data(response)
                         .build()
         );
     }
