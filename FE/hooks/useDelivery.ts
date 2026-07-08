@@ -1,6 +1,7 @@
 
 import api from "@/services/axios";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Alert as RNAlert } from "react-native";
 
 
 // Types
@@ -11,6 +12,7 @@ interface Delivery {
   route_id: string;
   add_by_operator_id: string;
   started_at: number;
+  is_resting?: boolean;
 }
 
 interface DeliveryResponse {
@@ -446,5 +448,34 @@ export const useDeliveryPositions = (delivery_id: string) => {
     queryFn: () => fetchDeliveryPositions(delivery_id),
     enabled: !!delivery_id,
     refetchInterval: 30000, // Auto-refresh every 30 seconds
+  });
+};
+
+
+export const useToggleRestMode = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const response = await api.post("/api/delivery/rest/toggle");
+      return response.data; // returns Boolean (newRestState) inside data
+    },
+    onSuccess: (data) => {
+      // Invalidate active delivery query
+      queryClient.invalidateQueries({
+        queryKey: ["deliveries_by_worker"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["worker_deliveries"],
+      });
+      RNAlert.alert(
+        "Mode Istirahat",
+        data?.data ? "Mode istirahat diaktifkan. Pelacakan diam ditangguhkan." : "Mode istirahat dimatikan. Perjalanan dilanjutkan.",
+        [{ text: "OK" }]
+      );
+    },
+    onError: (error: any) => {
+      const message = error?.response?.data?.message || "Gagal mengubah mode istirahat";
+      RNAlert.alert("Gagal", message, [{ text: "OK" }]);
+    },
   });
 };

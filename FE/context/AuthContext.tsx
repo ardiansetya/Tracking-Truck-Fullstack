@@ -1,7 +1,9 @@
 // context/AuthContext.tsx
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { DeviceEventEmitter } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { jwtDecode } from 'jwt-decode';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   AuthContextType,
   User,
@@ -91,6 +93,17 @@ export const AuthProvider = ({ children }: { children: ReactNode}) => {
     };
   }, []);
 
+  // Listen to auth-unauthorized events (e.g. from axios interceptor) to logout driver immediately
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener('auth-unauthorized', () => {
+      if (accessToken !== null || user !== null) {
+        console.log('🔄 AuthContext: Unauthorized event received, logging out...');
+        logout();
+      }
+    });
+    return () => sub.remove();
+  }, [accessToken, user]);
+
   // Login function
   const login = async (credentials: LoginRequest): Promise<void> => {
     try {
@@ -108,7 +121,8 @@ export const AuthProvider = ({ children }: { children: ReactNode}) => {
       await Promise.all([
         SecureStore.setItemAsync(ACCESS_TOKEN_KEY, newAccessToken),
         SecureStore.setItemAsync(REFRESH_TOKEN_KEY, newRefreshToken),
-        // SecureStore.setItemAsync('user', JSON.stringify(userData)),
+        AsyncStorage.setItem("access_token_fallback", newAccessToken),
+        AsyncStorage.setItem("refresh_token_fallback", newRefreshToken),
       ]);
 
       // Update state
@@ -176,6 +190,16 @@ const logout = async (): Promise<void> => {
 
     // ✅ Hapus semua token & user info
     await clearTokens();
+
+    // ✅ Stop background location task and clear storage keys
+    try {
+      const { BackgroundLocationService } = require("@/services/backgroundLocationService");
+      const AsyncStorage = require("@react-native-async-storage/async-storage").default;
+      await BackgroundLocationService.stop();
+      await AsyncStorage.multiRemove(['active_delivery_id', 'is_resting', 'offline_positions_queue']);
+    } catch (err) {
+      console.error("❌ Failed to clean up background location on logout:", err);
+    }
 
     console.log("👋 Logout successful");
 

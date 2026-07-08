@@ -58,11 +58,11 @@ export const useLocation = (): UseLocationReturn => {
     }
   };
 
-  // Helper: build LocationData + deteksi mocked
-  const buildLocationData = async (locationResult: Location.LocationObject) => {
+  // Helper: build LocationData + deteksi mocked (non-blocking reverse geocode)
+  const buildLocationData = (locationResult: Location.LocationObject) => {
     const { latitude, longitude, accuracy } = locationResult.coords;
 
-    let locationData: LocationData = {
+    const locationData: LocationData = {
       latitude,
       longitude,
       accuracy: accuracy || undefined,
@@ -71,19 +71,15 @@ export const useLocation = (): UseLocationReturn => {
 
     setIsMocked(locationResult.mocked ?? false);
 
-    try {
-      const geocoding = await Location.reverseGeocodeAsync({
-        latitude,
-        longitude,
-      });
-      if (geocoding && geocoding.length > 0) {
-        const address = geocoding[0];
-        locationData = {
-          ...locationData,
-          city: address.city || undefined,
-          region: address.region || undefined,
-          country: address.country || undefined,
-          address: [
+    // Run reverse geocoding asynchronously in the background so it doesn't block location updates
+    Location.reverseGeocodeAsync({
+      latitude,
+      longitude,
+    })
+      .then((geocoding) => {
+        if (geocoding && geocoding.length > 0) {
+          const address = geocoding[0];
+          const fullAddress = [
             address.name,
             address.street,
             address.city,
@@ -91,12 +87,26 @@ export const useLocation = (): UseLocationReturn => {
             address.country,
           ]
             .filter(Boolean)
-            .join(", "),
-        };
-      }
-    } catch (err) {
-      console.warn("Reverse geocoding failed:", err);
-    }
+            .join(", ");
+
+          setLocation((prev) => {
+            // Only update address if it matches the current active location coordinates
+            if (prev && prev.latitude === latitude && prev.longitude === longitude) {
+              return {
+                ...prev,
+                city: address.city || undefined,
+                region: address.region || undefined,
+                country: address.country || undefined,
+                address: fullAddress,
+              };
+            }
+            return prev;
+          });
+        }
+      })
+      .catch((err) => {
+        console.warn("Reverse geocoding failed:", err);
+      });
 
     return locationData;
   };
@@ -117,7 +127,7 @@ export const useLocation = (): UseLocationReturn => {
         accuracy: Location.Accuracy.High,
       });
 
-      const locationData = await buildLocationData(locationResult);
+      const locationData = buildLocationData(locationResult);
 
       setLocation(locationData);
 
@@ -150,8 +160,8 @@ export const useLocation = (): UseLocationReturn => {
           timeInterval: 5000,
           distanceInterval: 5,
         },
-        async (locationResult) => {
-          const locationData = await buildLocationData(locationResult);
+        (locationResult) => {
+          const locationData = buildLocationData(locationResult);
           setLocation(locationData);
 
           if (locationData.mocked) {

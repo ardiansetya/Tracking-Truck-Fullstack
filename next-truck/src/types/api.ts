@@ -204,7 +204,11 @@ export type UpdateTruckRequest = {
 export type RouteData = {
   id: string;
   start_city_name: string;
+  start_city_lat: number;
+  start_city_lon: number;
   end_city_name: string;
+  end_city_lat: number;
+  end_city_lon: number;
   details: string;
   cargo_type: string;
   base_price: number;
@@ -212,7 +216,8 @@ export type RouteData = {
   estimated_duration_hours: number;
   is_active: boolean;
   created_at: number;
-}
+};
+
 
 export type CreateRouteRequest = {
   start_city_id: string;
@@ -252,4 +257,58 @@ export type Position = {
 export type TrackingData = {
   status: string;
   data: Position[];
+}
+
+export type WebResponse<T> = {
+  status: string;
+  data: T;
+  message?: string;
+}
+
+export type AutocompleteDTO = {
+  place_id: string;
+  osm_id: string;
+  osm_type: string;
+  display_name: string;
+  lat: string;
+  lon: string;
+  address?: {
+    name?: string;
+    road?: string;
+    suburb?: string;
+    city?: string;
+    state?: string;
+    country?: string;
+  };
+}
+
+export type DirectionsResponse = {
+  code: string;
+  routes: {
+    geometry: string;
+    distance: number;
+    duration: number;
+    weight: number;
+    weight_name: string;
+  }[];
+  waypoints: {
+    name: string;
+    location: number[];
+  }[];
+}
+
+export type MatchingResponse = {
+  code: string;
+  matchings: {
+    geometry: string;
+    distance: number;
+    duration: number;
+    confidence: number;
+  }[];
+  tracepoints: {
+    name: string;
+    location: number[];
+    matchings_index: number;
+    waypoint_index: number;
+  }[];
 }

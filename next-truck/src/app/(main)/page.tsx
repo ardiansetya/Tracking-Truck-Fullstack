@@ -92,6 +92,8 @@ export default function Home() {
         case "FUEL_ISSUE": return "Masalah BBM";
         case "UNAUTHORIZED_UNLOADING": return "Bongkar Ilegal";
         case "CANCELED": return "Dibatalkan";
+        case "REST_START": return "Driver Mulai Istirahat";
+        case "REST_END": return "Driver Selesai Istirahat";
         default: return type;
       }
     };
@@ -185,12 +187,15 @@ export default function Home() {
         const plate = getTruckPlate(del?.truck_id);
         const firstLine = a.message ? a.message.split("\n")[0] : "";
 
+        const isInfoAlert = a.type.toLowerCase() === "rest_start" || a.type.toLowerCase() === "rest_end";
         logs.push({
           id: a.delivery_id || "ALERT",
           plateNumber: plate,
-          status: `Peringatan: ${translateAlertType(a.type)} - ${firstLine}`,
+          status: isInfoAlert 
+            ? `Info: ${translateAlertType(a.type)} - ${firstLine}`
+            : `Peringatan: ${translateAlertType(a.type)} - ${firstLine}`,
           timestamp: a.created_at,
-          type: "alert",
+          type: isInfoAlert ? "info" : "alert",
           time: formatTimeAgo(a.created_at),
         });
       });
@@ -309,6 +314,7 @@ export default function Home() {
                      <div className={cn(
                        "h-2 w-2 rounded-full ring-4 ring-background z-10",
                        log.type === "alert" ? "bg-destructive animate-pulse" :
+                       log.type === "info" ? "bg-blue-500" :
                        i === 0 ? "bg-primary animate-pulse" : "bg-muted-foreground/30"
                      )} />
                      {i !== arr.length - 1 && <div className="w-[1px] h-12 bg-border mt-1" />}
@@ -320,7 +326,9 @@ export default function Home() {
                     </div>
                     <p className={cn(
                       "text-sm font-medium transition-colors cursor-pointer",
-                      log.type === "alert" ? "text-destructive font-semibold" : "text-muted-foreground group-hover:text-primary"
+                      log.type === "alert" ? "text-destructive font-semibold" :
+                      log.type === "info" ? "text-blue-500 font-semibold" :
+                      "text-muted-foreground group-hover:text-primary"
                     )}>
                       {log.status}
                     </p>

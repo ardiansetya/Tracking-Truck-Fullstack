@@ -120,6 +120,7 @@ CREATE TABLE `positions` (
   `recorded_at` bigint NOT NULL,
   `delivery_id` varchar(255) DEFAULT NULL,
   PRIMARY KEY (`id`),
+  KEY `idx_delivery_recorded` (`delivery_id`,`recorded_at`),
   KEY `FKhosicwu2b3kblxu0fimpy61q9` (`delivery_id`),
   CONSTRAINT `FKhosicwu2b3kblxu0fimpy61q9` FOREIGN KEY (`delivery_id`) REFERENCES `deliveries` (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

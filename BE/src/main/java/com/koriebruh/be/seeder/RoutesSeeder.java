@@ -20,9 +20,12 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.core.annotation.Order;
+
 @Component
 @RequiredArgsConstructor
 @Slf4j
+@Order(3)
 public class RoutesSeeder implements CommandLineRunner {
 
 

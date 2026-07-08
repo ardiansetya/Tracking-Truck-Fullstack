@@ -39,6 +39,12 @@ public class Delivery {
     @Column(name = "finished_at")
     private Long finishedAt;
 
+    @Column(name = "is_resting", nullable = false)
+    private Boolean isResting = false;
+
+    @Column(name = "is_demo", nullable = false)
+    private Boolean isDemo = false;
+
     @ManyToOne(optional = true)
     @JoinColumn(name = "add_by_operator_id", nullable = true)
     private User addByOperatorId;

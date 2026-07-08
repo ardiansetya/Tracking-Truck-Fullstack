@@ -49,7 +49,7 @@ const LoginPage = () => {
           </div>
           <div className="space-y-1">
             <h1 className="font-bold text-3xl tracking-tight text-foreground/90">
-              Next<span className="text-primary">Truck</span>
+              Truck<span className="text-primary">Tracker</span>
             </h1>
             <p className="text-sm text-muted-foreground font-medium">
               Sistem Manajemen Truk

@@ -22,8 +22,14 @@ import java.util.Optional;
 public class AuthService {
     private static final Logger logger = LoggerFactory.getLogger(AuthService.class);
 
+    @org.springframework.beans.factory.annotation.Value("${app.demo-mode:false}")
+    private boolean demoMode;
+
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private jakarta.servlet.http.HttpServletRequest httpRequest;
 
     @Autowired
     private ValidationService validationService;
@@ -87,8 +93,11 @@ public class AuthService {
          * Generate access token baru setiap login
          * Kalau refresh token nggak valid, generate baru
          * */
-        Long sevenDaysInMillis = 604800000L; // 7 days in milliseconds
-        Long fifteenMillis = 900000L; // 15 minutes in milliseconds
+        String demoHeader = httpRequest != null ? httpRequest.getHeader("X-Demo-Mode") : null;
+        boolean isDemo = "true".equalsIgnoreCase(demoHeader) || demoMode;
+
+        Long sevenDaysInMillis = isDemo ? 600000L : 604800000L; // 10 minutes vs 7 days in milliseconds
+        Long fifteenMillis = isDemo ? 20000L : 900000L; // 20s vs 15 minutes in milliseconds
         String refreshToken;
         try {
             if (user.getRefreshToken() != null && jwtUtil.validateToken(user.getRefreshToken(), user.getUsername())) {
@@ -134,8 +143,11 @@ public class AuthService {
 
     public RefreshTokenResponse getAccessToken(RefreshTokenRequest request) {
         logger.debug("🔧 [TOKEN REFRESH] Generating new tokens...");
-        Long fifteenMillis = 900000L; // 15 minutes in milliseconds
-        Long sevenDaysInMillis = 604800000L; // 7 days in milliseconds
+        String demoHeader = httpRequest != null ? httpRequest.getHeader("X-Demo-Mode") : null;
+        boolean isDemo = "true".equalsIgnoreCase(demoHeader) || demoMode;
+
+        Long fifteenMillis = isDemo ? 20000L : 900000L; // 20s vs 15 minutes in milliseconds
+        Long sevenDaysInMillis = isDemo ? 600000L : 604800000L; // 10 minutes vs 7 days in milliseconds
 
         Optional<User> userOps = userRepository.findByRefreshToken(request.getRefreshToken());
         if (userOps.isEmpty()) {

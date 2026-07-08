@@ -32,7 +32,7 @@ export const useAuthenticatedTracking = (
 ): UseAuthenticatedTrackingReturn => {
   const {
     autoStart = true,
-    interval = 900000, // 15 minutes
+    interval = 60000, // 60 seconds
     distanceInterval = 100, // 100 meter
   } = options;
 

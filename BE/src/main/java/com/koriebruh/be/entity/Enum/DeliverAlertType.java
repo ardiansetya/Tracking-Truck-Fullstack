@@ -20,6 +20,8 @@ public enum DeliverAlertType {
     FUEL_ISSUE,         // Running low on fuel
     ACCIDENT,           // Accident involved
     WEATHER_DELAY,      // Weather-related delays
+    REST_START,         // Driver starts resting
+    REST_END,           // Driver ends resting
     DRIVER_MESSAGE;     // Custom message from driver
 
     @Override

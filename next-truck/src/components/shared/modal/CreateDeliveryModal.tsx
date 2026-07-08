@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
 
-import { useCreateDelivery } from "@/hooks";
+import { useCreateDelivery, useRoute } from "@/hooks";
 import {
   CreateDeliveryFormValues,
   createDeliverySchema,
@@ -42,11 +42,14 @@ const CreateDeliveryModal = () => {
     },
   });
 
+  const routeId = form.watch("route_id");
+  const { data: route } = useRoute(routeId, !!routeId);
+
   const onSubmit = (values: CreateDeliveryFormValues) => {
     createDelivery(
       {
-        latitude: values.latitude ?? 0,
-        longitude: values.longitude ?? 0,
+        latitude: route?.start_city_lat ?? (values.latitude ?? 0),
+        longitude: route?.start_city_lon ?? (values.longitude ?? 0),
         worker_id: values.worker_id,
         route_id: values.route_id,
         truck_id: values.truck_id,

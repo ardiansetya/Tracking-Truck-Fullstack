@@ -4,6 +4,8 @@ import axios, {
   InternalAxiosRequestConfig,
 } from "axios";
 import * as SecureStore from "expo-secure-store";
+import { DeviceEventEmitter } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const BASE_URL = process.env.EXPO_PUBLIC_API_URL || "http://localhost:8080";
 
@@ -40,12 +42,27 @@ const api = axios.create({
 api.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
     try {
-      const access_token = await SecureStore.getItemAsync(ACCESS_TOKEN_KEY);
+      let access_token = null;
+      try {
+        access_token = await SecureStore.getItemAsync(ACCESS_TOKEN_KEY);
+      } catch (e) {
+        console.log("SecureStore get ACCESS_TOKEN_KEY error, using fallback:", e);
+      }
+      if (!access_token) {
+        access_token = await AsyncStorage.getItem("access_token_fallback");
+      }
+
       if (access_token && config.headers) {
         config.headers.Authorization = `Bearer ${access_token}`;
       }
+
+      // Sync demo mode status via custom header
+      const demo_mode = await AsyncStorage.getItem("demo_mode");
+      if (config.headers) {
+        config.headers["X-Demo-Mode"] = demo_mode === "true" ? "true" : "false";
+      }
     } catch (error) {
-      console.error("❌ Error getting access token:", error);
+      console.error("❌ Error setting request headers:", error);
     }
     return config;
   },
@@ -104,7 +121,15 @@ api.interceptors.response.use(
 // =======================
 const refreshAccessToken = async (): Promise<string | null> => {
   try {
-    const refresh_token = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
+    let refresh_token = null;
+    try {
+      refresh_token = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
+    } catch (e) {
+      console.log("SecureStore get REFRESH_TOKEN_KEY error, using fallback:", e);
+    }
+    if (!refresh_token) {
+      refresh_token = await AsyncStorage.getItem("refresh_token_fallback");
+    }
 
     if (!refresh_token) {
       console.warn(`[${getTimestamp()}] ⚠️ [TOKEN REFRESH] No refresh token available`);
@@ -135,11 +160,21 @@ const refreshAccessToken = async (): Promise<string | null> => {
 
     // Simpan hanya jika string
     if (access_token && typeof access_token === "string") {
-      await SecureStore.setItemAsync(ACCESS_TOKEN_KEY, access_token);
+      try {
+        await SecureStore.setItemAsync(ACCESS_TOKEN_KEY, access_token);
+      } catch (e) {
+        console.log("SecureStore set ACCESS_TOKEN_KEY error:", e);
+      }
+      await AsyncStorage.setItem("access_token_fallback", access_token);
       console.log(`[${getTimestamp()}] ✅ [TOKEN REFRESH] New access token stored: ${getTokenPrefix(access_token)}`);
     }
     if (newrefresh_token && typeof newrefresh_token === "string") {
-      await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, newrefresh_token);
+      try {
+        await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, newrefresh_token);
+      } catch (e) {
+        console.log("SecureStore set REFRESH_TOKEN_KEY error:", e);
+      }
+      await AsyncStorage.setItem("refresh_token_fallback", newrefresh_token);
       if (newrefresh_token !== refresh_token) {
         console.log(`[${getTimestamp()}] 🔄 [TOKEN REFRESH] Token rotated!`);
         console.log(`[${getTimestamp()}]    Old: ${getTokenPrefix(refresh_token)}`);
@@ -164,12 +199,21 @@ const refreshAccessToken = async (): Promise<string | null> => {
 // =======================
 const clearTokens = async (): Promise<void> => {
   try {
+    try {
+      await Promise.all([
+        SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY),
+        SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY),
+        SecureStore.deleteItemAsync("user"),
+      ]);
+    } catch (e) {
+      console.log("SecureStore delete tokens error:", e);
+    }
     await Promise.all([
-      SecureStore.deleteItemAsync(ACCESS_TOKEN_KEY),
-      SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY),
-      SecureStore.deleteItemAsync("user"),
+      AsyncStorage.removeItem("access_token_fallback"),
+      AsyncStorage.removeItem("refresh_token_fallback"),
     ]);
     console.log(`[${getTimestamp()}] 🗑️ [TOKEN CLEAR] All tokens cleared`);
+    DeviceEventEmitter.emit('auth-unauthorized');
   } catch (error) {
     console.error(`[${getTimestamp()}] ❌ [TOKEN CLEAR] Error:`, error);
   }

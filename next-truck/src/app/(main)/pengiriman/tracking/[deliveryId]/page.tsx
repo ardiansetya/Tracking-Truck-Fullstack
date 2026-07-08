@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, MapPin, Clock, Navigation, RefreshCw, Database, Globe, Zap, Download, AlertTriangle } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useTrackingPositions, useDelivery, useTrucks } from "@/hooks";
+import { useTrackingPositions, useDelivery, useTrucks, useUser, useRoute } from "@/hooks";
 import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState, useEffect } from "react";
 import { MotionWrapper } from "@/components/shared/MotionWrapper";
@@ -33,6 +33,7 @@ export default function TrackingPage() {
 
   const [isDemoMode, setIsDemoMode] = useState<boolean>(false);
   const [isMounted, setIsMounted] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     setIsMounted(true);
@@ -47,17 +48,19 @@ export default function TrackingPage() {
     localStorage.setItem("admin_demo_mode", String(val));
   };
 
-  const refetchInterval = isDemoMode ? 10000 : 900000;
+  const { data: deliveryData } = useDelivery(deliveryId);
+  const isFinished = !!deliveryData?.finished_at;
+  const refetchInterval = isFinished ? false : (isDemoMode ? 10000 : 60000);
 
   const {
     data: trackingData,
     isLoading: loading,
     isFetching: fetching,
     refetch,
-  } = useTrackingPositions(deliveryId, refetchInterval);
-
-  const { data: deliveryData } = useDelivery(deliveryId);
+  } = useTrackingPositions(deliveryId, refetchInterval, !isFinished);
   const { data: trucks } = useTrucks();
+  const { data: driverData } = useUser(deliveryData?.worker_id || "", !!deliveryData?.worker_id);
+  const { data: routeData } = useRoute(deliveryData?.route_id || "", !!deliveryData?.route_id);
 
   const truckPlate = useMemo(() => {
     if (!deliveryData || !trucks) return "";
@@ -99,6 +102,75 @@ export default function TrackingPage() {
   const positions = Array.isArray(trackingData) ? trackingData : [];
   const currentPosition = positions[0];
 
+  // Filter out redundant positions that are within 5 meters of the last recorded unique position.
+  // This keeps the timeline readable by hiding stationary/parking jitter.
+  const filteredPositions = useMemo(() => {
+    if (positions.length === 0) return [];
+    
+    // Sort oldest first to compute distances in chronological order
+    const sorted = [...positions].sort((a, b) => a.recorded_at - b.recorded_at);
+    
+    const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+      const R = 6371e3; // metres
+      const φ1 = lat1 * Math.PI/180;
+      const φ2 = lat2 * Math.PI/180;
+      const Δφ = (lat2-lat1) * Math.PI/180;
+      const Δλ = (lon2-lon1) * Math.PI/180;
+
+      const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                Math.cos(φ1) * Math.cos(φ2) *
+                Math.sin(Δλ/2) * Math.sin(Δλ/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      return R * c;
+    };
+
+    const filtered: any[] = [sorted[0]];
+    for (let i = 1; i < sorted.length; i++) {
+      const lastKept = filtered[filtered.length - 1];
+      const current = sorted[i];
+
+      // 1. Check if name/address is identical to avoid same spot duplicates
+      const addr1 = `${lastKept.name || ""}_${lastKept.formatted_address || ""}`;
+      const addr2 = `${current.name || ""}_${current.formatted_address || ""}`;
+      if (addr1 && addr2 && addr1 === addr2) {
+        continue;
+      }
+
+      // 2. Check distance with 50-meter threshold to filter out GPS jitter
+      const distance = getDistance(
+        Number(lastKept.latitude),
+        Number(lastKept.longitude),
+        Number(current.latitude),
+        Number(current.longitude)
+      );
+      
+      if (distance >= 50) {
+        filtered.push(current);
+      }
+    }
+    
+    // Return sorted newest first (descending)
+    return filtered.reverse();
+  }, [positions]);
+
+  const itemsPerPage = 9;
+  const totalPages = Math.ceil(filteredPositions.length / itemsPerPage);
+  const paginatedPositions = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredPositions.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredPositions, currentPage]);
+
+  const sortedAlerts = useMemo(() => {
+    const rawAlerts = deliveryData?.alerts || [];
+    return [...rawAlerts].sort((a, b) => b.created_at - a.created_at);
+  }, [deliveryData?.alerts]);
+
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(totalPages);
+    }
+  }, [totalPages, currentPage]);
+
   const formatLastUpdated = () => {
     if (!lastUpdated) return "BELUM ADA DATA";
     const now = Date.now();
@@ -111,15 +183,15 @@ export default function TrackingPage() {
   };
 
   const exportToCSV = () => {
-    if (positions.length === 0) return;
+    if (filteredPositions.length === 0) return;
 
     const csvRows = [
       "sep=,", // Force Microsoft Excel to use comma as the column delimiter
       "DETAIL PENGIRIMAN",
       `ID Pengiriman,"${deliveryId}"`,
       `Nomor Plat Truk,"${(truckPlate || "-").replace(/"/g, '""')}"`,
-      `ID Driver,"${(deliveryData?.worker_id || "-").replace(/"/g, '""')}"`,
-      `ID Rute,"${(deliveryData?.route_id || "-").replace(/"/g, '""')}"`,
+      `Nama Driver,"${(driverData?.username || "-").replace(/"/g, '""')}"`,
+      `Nama Rute,"${routeData ? `${routeData.start_city_name} - ${routeData.end_city_name}`.replace(/"/g, '""') : "-"}"`,
       `Waktu Mulai,"${deliveryData?.started_at ? new Date(deliveryData.started_at * 1000).toLocaleString("id-ID") : "-"}"`,
       `Waktu Selesai,"${deliveryData?.finished_at ? new Date(deliveryData.finished_at * 1000).toLocaleString("id-ID") : "-"}"`,
       "",
@@ -129,7 +201,7 @@ export default function TrackingPage() {
     const alertHeaders = ["No", "Tipe Kendala", "Pesan Kendala", "Waktu Kejadian"];
     csvRows.push(alertHeaders.join(","));
 
-    const alerts = deliveryData?.alerts || [];
+    const alerts = sortedAlerts;
     if (alerts.length === 0) {
       csvRows.push("-,Tidak ada kendala terdeteksi,-,-");
     } else {
@@ -173,7 +245,7 @@ export default function TrackingPage() {
     const locationHeaders = ["No", "Nama Lokasi", "Alamat Lengkap", "Kota", "Provinsi", "Negara", "Latitude", "Longitude", "Waktu Rekam"];
     csvRows.push(locationHeaders.join(","));
 
-    positions.forEach((pos: any, index: number) => {
+    filteredPositions.forEach((pos: any, index: number) => {
       const waktu = new Date(pos.recorded_at * 1000).toLocaleString("id-ID", {
         day: "2-digit",
         month: "long",
@@ -227,12 +299,16 @@ export default function TrackingPage() {
             <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground/90 leading-tight">Lacak Lokasi Driver</h1>
             <div className="flex items-center gap-3">
                <p className="text-muted-foreground text-sm font-medium truncate">ID: {deliveryId}</p>
-               <div className={cn(
-                 "px-3 py-1 rounded-full text-[10px] font-bold animate-pulse",
-                 fetching ? "bg-amber-500/10 text-amber-500" : "bg-green-500/10 text-green-600"
-               )}>
-                  {fetching ? "MEMUAT DATA..." : "ONLINE"}
-               </div>
+                <div className={cn(
+                  "px-3 py-1 rounded-full text-[10px] font-bold",
+                  isFinished 
+                    ? "bg-slate-500/10 text-slate-600" 
+                    : fetching 
+                      ? "bg-amber-500/10 text-amber-500 animate-pulse" 
+                      : "bg-green-500/10 text-green-600 animate-pulse"
+                )}>
+                  {isFinished ? "SELESAI" : fetching ? "MEMUAT DATA..." : "ONLINE"}
+                </div>
             </div>
           </div>
         </div>
@@ -306,6 +382,85 @@ export default function TrackingPage() {
               )}
             </BentoCard>
           </MotionWrapper>
+
+          {/* Riwayat Linimasa */}
+          {positions.length > 0 && (
+            <MotionWrapper delay={0.4}>
+              <BentoCard title="Riwayat Lokasi" subtitle="Daftar lokasi yang dilewati" icon={<Database className="h-5 w-5" />}>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-6">
+                  {paginatedPositions.map((position, index) => {
+                    const isCurrentPosition = currentPage === 1 && index === 0;
+                    return (
+                      <div
+                        key={index}
+                        className={cn(
+                          "flex flex-col gap-6 p-6 rounded-3xl border transition-all relative group",
+                          isCurrentPosition
+                            ? "bg-primary/5 border-primary/30 shadow-lg shadow-primary/5"
+                            : "bg-secondary/10 border-border/40 hover:border-primary/20"
+                        )}
+                      >
+                        {isCurrentPosition && (
+                           <div className="absolute top-4 right-4 px-3 py-1 rounded-full bg-primary text-[10px] font-bold text-primary-foreground animate-pulse">
+                              Posisi Sekarang
+                           </div>
+                        )}
+                        
+                        <div className="flex items-start gap-5">
+                          <div className={cn(
+                            "w-14 h-14 rounded-2xl flex items-center justify-center border-2 shrink-0 transition-transform group-hover:scale-110",
+                            isCurrentPosition ? "bg-primary text-primary-foreground border-primary" : "bg-background border-border"
+                          )}>
+                            <MapPin className="h-6 w-6" />
+                          </div>
+                          <div className="min-w-0 space-y-1">
+                            <h4 className="font-bold text-base tracking-tight truncate group-hover:text-primary transition-colors">
+                              {position.name || "-"}
+                            </h4>
+                            <p className="text-xs font-bold text-muted-foreground/60 uppercase tracking-widest truncate">
+                              {position.city || "-"}, {position.state || "-"}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="mt-auto pt-6 border-t border-dashed border-border/50 flex items-center justify-between text-[11px] font-bold tracking-widest">
+                           <span className="text-muted-foreground/30">{formatDate(position.recorded_at)}</span>
+                           <span className="text-primary/60">{formatTimeAgo(position.recorded_at)}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Pagination Controls */}
+                {totalPages > 1 && (
+                  <div className="flex justify-center items-center gap-4 mt-8 pt-6 border-t border-border/20">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={currentPage === 1}
+                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                      className="rounded-xl px-4"
+                    >
+                      Sebelumnya
+                    </Button>
+                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
+                      Halaman {currentPage} dari {totalPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={currentPage === totalPages}
+                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                      className="rounded-xl px-4"
+                    >
+                      Berikutnya
+                    </Button>
+                  </div>
+                )}
+              </BentoCard>
+            </MotionWrapper>
+          )}
         </div>
 
         {/* Area Info Sidebar */}
@@ -329,7 +484,7 @@ export default function TrackingPage() {
                          <p className="text-xs font-medium text-muted-foreground/60 leading-relaxed">{currentPosition.formatted_address}</p>
                       </div>
 
-                      <div className="space-y-4">
+                      {/* <div className="space-y-4">
                          {[
                            { label: "Wilayah", value: `${currentPosition.city}, ${currentPosition.state}`, icon: Globe },
                            { label: "Waktu Update", value: formatDate(currentPosition.recorded_at), icon: Clock },
@@ -342,7 +497,7 @@ export default function TrackingPage() {
                               <span className="text-sm font-bold truncate">{item.value}</span>
                            </div>
                          ))}
-                      </div>
+                      </div> */}
 
                       <div className="grid grid-cols-2 gap-4">
                         <div className="p-4 bg-secondary/5 rounded-2xl border text-center space-y-1">
@@ -365,17 +520,40 @@ export default function TrackingPage() {
             </BentoCard>
           </MotionWrapper>
 
+          <MotionWrapper delay={0.25}>
+            <BentoCard 
+              title="Informasi Pengiriman" 
+              subtitle="Driver, armada & rute aktif" 
+              icon={<Database className="h-5 w-5 text-primary" />}
+            >
+              <div className="mt-4 space-y-4">
+                {[
+                  { label: "Driver / Pengemudi", value: driverData?.username || "-", desc: driverData?.email || "ID: " + (deliveryData?.worker_id || "-") },
+                  { label: "Armada Truk", value: truckPlate || "-", desc: "ID Truk: " + (deliveryData?.truck_id || "-") },
+                  { label: "Rute Perjalanan", value: routeData ? `${routeData.start_city_name} ➔ ${routeData.end_city_name}` : "-", desc: routeData?.notes || "Rute Aktif" },
+                  { label: "Waktu Mulai", value: deliveryData?.started_at ? new Date(deliveryData.started_at * 1000).toLocaleString("id-ID", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "-", desc: "Tanggal Pengiriman" },
+                ].map((item, i) => (
+                  <div key={i} className="p-4 bg-secondary/5 hover:bg-secondary/10 rounded-2xl border transition-all space-y-1">
+                    <p className="text-[9px] font-bold text-muted-foreground/40 uppercase tracking-widest">{item.label}</p>
+                    <p className="text-sm font-bold text-foreground">{item.value}</p>
+                    <p className="text-[10px] text-muted-foreground/60">{item.desc}</p>
+                  </div>
+                ))}
+              </div>
+            </BentoCard>
+          </MotionWrapper>
+
           <MotionWrapper delay={0.3}>
             <BentoCard title="Kendala Terlaporkan" subtitle="Laporan aktif dari driver" icon={<AlertTriangle className="h-5 w-5 text-destructive" />}>
               <div className="mt-4 space-y-4">
-                {!deliveryData?.alerts || deliveryData.alerts.length === 0 ? (
+                {sortedAlerts.length === 0 ? (
                   <div className="text-center py-6 border-2 border-dashed rounded-3xl bg-secondary/5 space-y-2">
                     <p className="text-sm font-bold opacity-30">TIDAK ADA KENDALA</p>
                     <p className="text-[9px] font-bold uppercase tracking-widest text-green-500 opacity-60">Status Lancar</p>
                   </div>
                 ) : (
                   <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
-                    {deliveryData.alerts.map((alert, index) => {
+                    {sortedAlerts.map((alert, index) => {
                       const translateAlert = (type: string) => {
                         const mapping: Record<string, string> = {
                           accident: "Kecelakaan",
@@ -387,13 +565,22 @@ export default function TrackingPage() {
                           fuel_issue: "Masalah BBM",
                           gps_lost: "GPS Hilang",
                           puncture: "Ban Bocor/Pecah",
+                          rest_start: "Mulai Istirahat",
+                          rest_end: "Selesai Istirahat",
                         };
                         return mapping[type.toLowerCase()] || type;
                       };
+
+                      const isInfo = alert.type.toLowerCase() === "rest_start" || alert.type.toLowerCase() === "rest_end";
+
                       return (
-                        <div key={index} className="p-4 bg-destructive/5 rounded-2xl border border-destructive/10 space-y-2">
+                        <div key={index} className={`p-4 rounded-2xl border space-y-2 ${
+                          isInfo ? "bg-blue-500/5 border-blue-500/10" : "bg-destructive/5 border-destructive/10"
+                        }`}>
                           <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-destructive/10 text-destructive uppercase tracking-wide">
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide ${
+                              isInfo ? "bg-blue-500/10 text-blue-600" : "bg-destructive/10 text-destructive"
+                            }`}>
                               {translateAlert(alert.type)}
                             </span>
                             <span className="text-[9px] text-muted-foreground font-medium">
@@ -416,55 +603,6 @@ export default function TrackingPage() {
         </div>
       </div>
 
-      {/* Riwayat Linimasa */}
-      {positions.length > 0 && (
-        <MotionWrapper delay={0.4}>
-          <BentoCard title="Riwayat Lokasi" subtitle="Daftar lokasi yang dilewati" icon={<Database className="h-5 w-5" />}>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mt-6">
-              {positions.map((position, index) => (
-                <div
-                  key={index}
-                  className={cn(
-                    "flex flex-col gap-6 p-6 rounded-3xl border transition-all relative group",
-                    index === 0
-                      ? "bg-primary/5 border-primary/30 shadow-lg shadow-primary/5"
-                      : "bg-secondary/10 border-border/40 hover:border-primary/20"
-                  )}
-                >
-                  {index === 0 && (
-                     <div className="absolute top-4 right-4 px-3 py-1 rounded-full bg-primary text-[10px] font-bold text-primary-foreground animate-pulse">
-                        Posisi Sekarang
-                     </div>
-                  )}
-                  
-                  <div className="flex items-start gap-5">
-                    <div className={cn(
-                      "w-14 h-14 rounded-2xl flex items-center justify-center border-2 shrink-0 transition-transform group-hover:scale-110",
-                      index === 0 ? "bg-primary text-primary-foreground border-primary" : "bg-background border-border"
-                    )}>
-                      <MapPin className="h-6 w-6" />
-                    </div>
-                    <div className="min-w-0 space-y-1">
-                      <h4 className="font-bold text-base tracking-tight truncate group-hover:text-primary transition-colors">
-                        {position.name}
-                      </h4>
-                      <p className="text-xs font-bold text-muted-foreground/60 uppercase tracking-widest truncate">
-                        {position.city}, {position.state}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="mt-auto pt-6 border-t border-dashed border-border/50 flex items-center justify-between text-[11px] font-bold tracking-widest">
-                     <span className="text-muted-foreground/30">{formatDate(position.recorded_at)}</span>
-                     <span className="text-primary/60">{formatTimeAgo(position.recorded_at)}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </BentoCard>
-        </MotionWrapper>
-      )}
-      
       <div className="h-[1px] w-full bg-gradient-to-r from-transparent via-primary/5 to-transparent pt-12" />
     </div>
   );

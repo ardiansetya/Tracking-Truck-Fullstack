@@ -13,28 +13,28 @@ interface TransitStatsCardsProps {
 export default function TransitStatsCards({ stats }: TransitStatsCardsProps) {
   const cards = [
     {
-      title: "Jaringan Transit",
-      subtitle: "Total Lokasi Transit",
+      title: "Total Titik Transit",
+      subtitle: "Jumlah Lokasi Singgah",
       value: stats.total,
       icon: MapPin,
       color: "text-blue-500",
-      description: "Titik transit terdaftar dalam jaringan"
+      description: "Semua lokasi transit terdaftar"
     },
     {
-      title: "Pos Aktif",
-      subtitle: "Siap Serah Terima",
+      title: "Titik Singgah Aktif",
+      subtitle: "Bisa Digunakan",
       value: stats.active,
       icon: CheckCircle,
       color: "text-green-500",
-      description: "Stasiun serah terima yang beroperasi penuh"
+      description: "Titik singgah yang siap melayani driver"
     },
     {
-      title: "Pos Nonaktif",
-      subtitle: "Koneksi Terputus",
+      title: "Titik Singgah Nonaktif",
+      subtitle: "Sedang Tidak Dipakai",
       value: stats.inactive,
       icon: XCircle,
       color: "text-red-400",
-      description: "Titik yang saat ini tidak sinkron dengan jaringan"
+      description: "Titik singgah yang dimatikan sementara"
     }
   ];
 

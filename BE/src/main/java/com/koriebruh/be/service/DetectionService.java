@@ -38,40 +38,50 @@ public class DetectionService {
     @Autowired
     private GeoAPI geoAPI;
 
+    @org.springframework.beans.factory.annotation.Value("${app.demo-mode:false}")
+    private boolean demoMode;
+
     /**
      * Scheduled task to automatically detect and create alerts for:
-     * 1. GPS_LOST - No GPS update in the last 15 minutes
+     * 1. GPS_LOST - No GPS update in the last 10 minutes
      * 2. ILLEGAL_STOP - Vehicle stationary for 45+ minutes
      * 
      * Runs every 5 minutes.
      * When triggered, system automatically sends alert to admin and owner with general message
      * like "Vehicle stationary - possible puncture or busy traffic"
      */
-    @Scheduled(fixedRate = 300_000) // Every 5 minutes (300,000 ms)
+    @Scheduled(fixedRateString = "${app.detection.rate:300000}") // Every 5 minutes default (or overridden by properties)
     public void detectIssues() {
         long now = Instant.now().getEpochSecond();
         List<Delivery> activeDeliveries = deliveryRepo.findAllByFinishedAtIsNull();
 
         for (Delivery delivery : activeDeliveries) {
+            if (delivery.getIsResting() != null && delivery.getIsResting()) {
+                continue;
+            }
+            boolean isDemo = delivery.getIsDemo() != null && delivery.getIsDemo();
+            long gpsLostThreshold = isDemo ? 15 : 600; // 15 seconds vs 10 minutes
+            long illegalStopThreshold = isDemo ? 30 : 2700; // 30 seconds vs 45 minutes
+
             Position latest = positionRepo.findTopByDeliveryIdOrderByRecordedAtDesc(delivery.getId());
 
-            // 1. GPS LOST CHECK - No GPS update in 15 minutes
-            if (latest == null || latest.getRecordedAt() < now - 900) {
+            // 1. GPS LOST CHECK - No GPS update
+            if (latest == null || latest.getRecordedAt() < now - gpsLostThreshold) {
                 DeliverAlert recent = deliverAlertRepo.findTopByDeliveryIdAndTypeOrderByCreatedAtDesc(delivery.getId(), DeliverAlertType.GPS_LOST);
-                if (recent == null || recent.getCreatedAt() < now - 900) {
+                if (recent == null || recent.getCreatedAt() < now - gpsLostThreshold) {
                     DeliverAlert alert = new DeliverAlert();
                     alert.setDelivery(delivery);
                     alert.setType(DeliverAlertType.GPS_LOST);
-                    alert.setMessage("No GPS update in the last 15 minutes. Possible issue like puncture or busy traffic.");
+                    alert.setMessage("No GPS update in the last " + (gpsLostThreshold / 60 > 0 ? (gpsLostThreshold / 60) + " minutes" : gpsLostThreshold + " seconds") + ". Possible issue like puncture or busy traffic.");
                     alert.setCreatedAt(now);
                     deliverAlertRepo.save(alert);
                 }
             }
 
-            // 2. ILLEGAL STOP CHECK - GPS Location Based (Vehicle stationary for 45+ minutes)
+            // 2. ILLEGAL STOP CHECK - GPS Location Based
             if (latest != null) {
-                // Get position from 45 minutes ago
-                Position oldPosition = positionRepo.findTopByDeliveryIdAndRecordedAtLessThanEqualOrderByRecordedAtDesc(delivery.getId(), now - 2700);
+                // Get position from threshold ago
+                Position oldPosition = positionRepo.findTopByDeliveryIdAndRecordedAtLessThanEqualOrderByRecordedAtDesc(delivery.getId(), now - illegalStopThreshold);
 
                 if (oldPosition != null) {
                     // Check if vehicle is still within 100 meter radius (stationary)
@@ -84,7 +94,7 @@ public class DetectionService {
                     if (stayingSameLocation) {
                         DeliverAlert recentLocationIllegal = deliverAlertRepo.findTopByDeliveryIdAndTypeOrderByCreatedAtDesc(delivery.getId(), DeliverAlertType.ILLEGAL_STOP);
 
-                        if (recentLocationIllegal == null || recentLocationIllegal.getCreatedAt() < now - 2700) {
+                        if (recentLocationIllegal == null || recentLocationIllegal.getCreatedAt() < now - illegalStopThreshold) {
                             DeliverAlert locationIllegalAlert = new DeliverAlert();
                             locationIllegalAlert.setDelivery(delivery);
                             locationIllegalAlert.setType(DeliverAlertType.ILLEGAL_STOP);
@@ -100,7 +110,8 @@ public class DetectionService {
                             }
 
                             locationIllegalAlert.setMessage(String.format(
-                                    "Vehicle stationary at same location for 45+ minutes. Possible puncture, busy traffic, or breakdown. Location: %s",
+                                    "Vehicle stationary at same location for %d seconds. Possible puncture, busy traffic, or breakdown. Location: %s",
+                                    illegalStopThreshold,
                                     locationText));
                             locationIllegalAlert.setCreatedAt(now);
                             deliverAlertRepo.save(locationIllegalAlert);

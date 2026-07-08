@@ -11,7 +11,9 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@Table(name = "positions")
+@Table(name = "positions", indexes = {
+    @Index(name = "idx_delivery_recorded", columnList = "delivery_id, recorded_at")
+})
 public class Position {
 
     @Id
@@ -29,4 +31,15 @@ public class Position {
     @Column(name = "recorded_at", nullable = false, updatable = false)
     private Long recordedAt;
 
+    @Column(length = 500)
+    private String name;
+
+    @Column(name = "formatted_address", length = 1000)
+    private String formattedAddress;
+
+    private String city;
+
+    private String state;
+
+    private String country;
 }

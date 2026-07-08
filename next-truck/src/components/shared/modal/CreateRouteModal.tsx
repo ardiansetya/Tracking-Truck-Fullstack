@@ -44,6 +44,8 @@ import {
 import { Plus, Check, ChevronsUpDown } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import CreateCityModal from "./CreateCityModal";
+
 
 const CreateRouteModal = ({
   buttonVariant,
@@ -54,8 +56,27 @@ const CreateRouteModal = ({
   const [startCityOpen, setStartCityOpen] = useState(false);
   const [endCityOpen, setEndCityOpen] = useState(false);
 
+  // States for city creation
+  const [createCityOpen, setCreateCityOpen] = useState(false);
+  const [activeCityField, setActiveCityField] = useState<"start" | "end" | null>(null);
+  const [searchName, setSearchName] = useState("");
+  const [startSearch, setStartSearch] = useState("");
+  const [endSearch, setEndSearch] = useState("");
+
   const { mutate: createRoute, isPending } = useCreateRoute();
   const { data: cities = [], isLoading: citiesLoading } = useCities();
+
+  const handleCityCreated = (city: { id: number; name: string }) => {
+    if (activeCityField === "start") {
+      form.setValue("start_city_id", String(city.id));
+      setStartCityOpen(false);
+    } else if (activeCityField === "end") {
+      form.setValue("end_city_id", String(city.id));
+      setEndCityOpen(false);
+    }
+    setActiveCityField(null);
+  };
+
 
   const form = useForm<CreateRouteFormValues>({
     resolver: zodResolver(createRouteSchema),
@@ -128,9 +149,34 @@ const CreateRouteModal = ({
                       </PopoverTrigger>
                       <PopoverContent className="w-full p-0">
                         <Command>
-                          <CommandInput placeholder="Cari kota..." />
-                          <CommandEmpty>
-                            {citiesLoading ? "Memuat kota..." : "Kota tidak ditemukan."}
+                          <CommandInput 
+                            placeholder="Cari kota..." 
+                            value={startSearch}
+                            onValueChange={setStartSearch}
+                          />
+                          <CommandEmpty className="p-2 text-center text-sm">
+                            {citiesLoading ? (
+                              "Memuat kota..."
+                            ) : (
+                              <div className="flex flex-col items-center gap-2 p-2">
+                                <span className="text-muted-foreground text-xs">Kota tidak ditemukan.</span>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="w-full text-xs"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setSearchName(startSearch);
+                                    setActiveCityField("start");
+                                    setCreateCityOpen(true);
+                                  }}
+                                >
+                                  + Tambah "{startSearch}" Baru
+                                </Button>
+                              </div>
+                            )}
                           </CommandEmpty>
                           <CommandGroup className="max-h-64 overflow-auto">
                             {cities.map((city) => (
@@ -189,9 +235,34 @@ const CreateRouteModal = ({
                       </PopoverTrigger>
                       <PopoverContent className="w-full p-0">
                         <Command>
-                          <CommandInput placeholder="Cari kota..." />
-                          <CommandEmpty>
-                            {citiesLoading ? "Memuat kota..." : "Kota tidak ditemukan."}
+                          <CommandInput 
+                            placeholder="Cari kota..." 
+                            value={endSearch}
+                            onValueChange={setEndSearch}
+                          />
+                          <CommandEmpty className="p-2 text-center text-sm">
+                            {citiesLoading ? (
+                              "Memuat kota..."
+                            ) : (
+                              <div className="flex flex-col items-center gap-2 p-2">
+                                <span className="text-muted-foreground text-xs">Kota tidak ditemukan.</span>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="w-full text-xs"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setSearchName(endSearch);
+                                    setActiveCityField("end");
+                                    setCreateCityOpen(true);
+                                  }}
+                                >
+                                  + Tambah "{endSearch}" Baru
+                                </Button>
+                              </div>
+                            )}
                           </CommandEmpty>
                           <CommandGroup className="max-h-64 overflow-auto">
                             {cities.map((city) => (
@@ -363,6 +434,12 @@ const CreateRouteModal = ({
             </DialogFooter>
           </form>
         </Form>
+        <CreateCityModal
+          open={createCityOpen}
+          onOpenChange={setCreateCityOpen}
+          onSuccess={handleCityCreated}
+          initialSearchName={searchName}
+        />
       </DialogContent>
     </Dialog>
   );

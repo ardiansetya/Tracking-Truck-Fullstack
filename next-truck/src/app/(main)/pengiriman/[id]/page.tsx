@@ -221,14 +221,22 @@ export default function DeliveryDetailPage() {
                         fuel_issue: "Masalah BBM",
                         gps_lost: "GPS Hilang",
                         puncture: "Ban Bocor/Pecah",
+                        rest_start: "Mulai Istirahat",
+                        rest_end: "Selesai Istirahat",
                       };
                       return mapping[type.toLowerCase()] || type;
                     };
 
+                    const isInfo = alert.type.toLowerCase() === "rest_start" || alert.type.toLowerCase() === "rest_end";
+
                     return (
-                      <div key={index} className="p-5 bg-destructive/5 rounded-3xl border border-destructive/10 space-y-3">
+                      <div key={index} className={`p-5 rounded-3xl border space-y-3 ${
+                        isInfo ? "bg-blue-500/5 border-blue-500/10" : "bg-destructive/5 border-destructive/10"
+                      }`}>
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold px-3 py-1 rounded-full bg-destructive/10 text-destructive uppercase tracking-wider">
+                          <span className={`text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider ${
+                            isInfo ? "bg-blue-500/10 text-blue-600" : "bg-destructive/10 text-destructive"
+                          }`}>
                             {translateAlert(alert.type)}
                           </span>
                           <span className="text-xs text-muted-foreground font-semibold">
@@ -307,15 +315,20 @@ export default function DeliveryDetailPage() {
                            Pengiriman telah selesai. Anda dapat mengunduh riwayat koordinat perjalanan driver dalam format CSV.
                         </p>
                      </div>
-                     <div className="flex flex-col gap-3">
-                       <button 
-                         onClick={exportToCSV}
-                         disabled={!trackingData || trackingData.length === 0}
-                         className="w-full py-4 bg-primary text-primary-foreground rounded-2xl text-xs font-bold hover:bg-primary/95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                       >
-                          <Download className="h-4 w-4" /> Export CSV
-                       </button>
-                     </div>
+                      <div className="flex flex-col gap-3">
+                        <Link href={`/pengiriman/tracking/${delivery.id}`} className="w-full block">
+                          <button className="w-full py-4 bg-secondary text-secondary-foreground rounded-2xl text-xs font-bold hover:bg-secondary/90 transition-all flex items-center justify-center gap-2">
+                             <Globe className="h-4 w-4" /> Buka Peta Lokasi
+                          </button>
+                        </Link>
+                        <button 
+                          onClick={exportToCSV}
+                          disabled={!trackingData || trackingData.length === 0}
+                          className="w-full py-4 bg-primary text-primary-foreground rounded-2xl text-xs font-bold hover:bg-primary/95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                           <Download className="h-4 w-4" /> Export CSV
+                        </button>
+                      </div>
                   </div>
                </BentoCard>
             </MotionWrapper>

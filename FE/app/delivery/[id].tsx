@@ -74,7 +74,9 @@ const DeliveryDetail = () => {
   const worker = worker_data?.data;
   const truck = truck_data?.data;
   const route = route_data?.data;
-  const alerts = delivery?.alerts || [];
+  const alerts = (delivery?.alerts || [])
+    .slice()
+    .sort((a, b) => b.created_at - a.created_at);
 
   // Auto-refresh for active deliveries
   useEffect(() => {
@@ -84,7 +86,7 @@ const DeliveryDetail = () => {
     if (isActiveDelivery) {
       const interval = setInterval(() => {
         // Placeholder for future active polling if needed
-      }, 900000); // 15 minutes
+      }, 60000); // 60 seconds
 
       setRefreshInterval(interval);
 

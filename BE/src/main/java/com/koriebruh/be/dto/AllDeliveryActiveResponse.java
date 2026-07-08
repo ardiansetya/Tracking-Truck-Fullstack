@@ -29,4 +29,6 @@ public class AllDeliveryActiveResponse {
     private String addByOperatorId;
 
     private Long startedAt;
+
+    private Boolean isResting;
 }

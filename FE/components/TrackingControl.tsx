@@ -21,7 +21,7 @@ export const TrackingControl = () => {
     requestPermissions,
   } = useAuthenticatedTracking({
     autoStart: true, // Auto-start setelah login
-    interval: 900000, // 15 menit (dalam milliseconds)
+    interval: 60000, // 60 detik (dalam milliseconds)
     distanceInterval: 100, // 100 meter
   });
 

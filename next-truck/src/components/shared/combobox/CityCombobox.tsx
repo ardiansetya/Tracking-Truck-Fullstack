@@ -19,6 +19,7 @@ import {
 import { useCities } from "@/hooks";
 import { cn } from "@/lib/utils";
 import type { CityData } from "@/hooks/useCity";
+import CreateCityModal from "../modal/CreateCityModal";
 
 type CityComboboxProps = {
   value: number | undefined;
@@ -28,50 +29,85 @@ type CityComboboxProps = {
 
 export function CityCombobox({ value, onChange, placeholder = "Pilih kota..." }: CityComboboxProps) {
   const [open, setOpen] = useState(false);
+  const [createCityOpen, setCreateCityOpen] = useState(false);
+  const [search, setSearch] = useState("");
   const { data: cities } = useCities();
 
   const selectedCity = cities?.find((c: CityData) => c.id === value);
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          className="w-full justify-between">
-          {selectedCity ? selectedCity.name : placeholder}
-          <ChevronsUpDown className="opacity-50" />
-        </Button>
-      </PopoverTrigger>
+    <>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            className="w-full justify-between">
+            {selectedCity ? selectedCity.name : placeholder}
+            <ChevronsUpDown className="opacity-50" />
+          </Button>
+        </PopoverTrigger>
 
-      <PopoverContent className="w-full p-0">
-        <Command>
-          <CommandInput placeholder="Cari kota..." className="h-9" />
-          <CommandList>
-            <CommandEmpty>Kota tidak ditemukan.</CommandEmpty>
-            <CommandGroup>
-              {cities?.map((c: CityData) => (
-                <CommandItem
-                  key={c.id}
-                  value={c.name.toLowerCase()}
-                  onSelect={() => {
-                    onChange(c.id);
-                    setOpen(false);
-                  }}>
-                  {c.name}
-                  <Check
-                    className={cn(
-                      "ml-auto",
-                      value === c.id ? "opacity-100" : "opacity-0"
-                    )}
-                  />
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+        <PopoverContent className="w-full p-0">
+          <Command>
+            <CommandInput 
+              placeholder="Cari kota..." 
+              className="h-9" 
+              value={search}
+              onValueChange={setSearch}
+            />
+            <CommandList>
+              <CommandEmpty className="p-2 text-center text-sm">
+                <p className="text-muted-foreground mb-2">Kota tidak ditemukan.</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-xs"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setCreateCityOpen(true);
+                  }}
+                >
+                  + Tambah "{search}" Baru
+                </Button>
+              </CommandEmpty>
+              <CommandGroup>
+                {cities?.map((c: CityData) => (
+                  <CommandItem
+                    key={c.id}
+                    value={c.name.toLowerCase()}
+                    onSelect={() => {
+                      onChange(c.id);
+                      setOpen(false);
+                    }}>
+                    {c.name}
+                    <Check
+                      className={cn(
+                        "ml-auto",
+                        value === c.id ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+
+      <CreateCityModal
+        open={createCityOpen}
+        onOpenChange={setCreateCityOpen}
+        onSuccess={(city) => {
+          onChange(city.id);
+          setOpen(false);
+        }}
+        initialSearchName={search}
+      />
+    </>
   );
 }
+

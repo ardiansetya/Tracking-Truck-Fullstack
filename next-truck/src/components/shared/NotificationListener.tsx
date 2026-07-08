@@ -66,6 +66,8 @@ export default function NotificationListener() {
       fuel_issue: "⛽ Masalah BBM",
       gps_lost: "📡 Sinyal GPS Hilang",
       puncture: "💥 Ban Pecah / Bocor",
+      rest_start: "☕ Driver Mulai Istirahat",
+      rest_end: "🏁 Driver Selesai Istirahat",
     };
     return mapping[type.toLowerCase()] || "⚠️ Peringatan Pengiriman";
   };
@@ -92,17 +94,30 @@ export default function NotificationListener() {
         if (!seenAlerts.current.has(alert.id)) {
           seenAlerts.current.add(alert.id);
           
-          playNotificationSound("error");
-
+          const isInfo = alert.type.toLowerCase() === "rest_start" || alert.type.toLowerCase() === "rest_end";
           const title = translateAlertTitle(alert.type);
-          toast.error(title, {
-            description: alert.message,
-            action: alert.delivery_id ? {
-              label: "Lacak",
-              onClick: () => router.push(`/pengiriman/tracking/${alert.delivery_id}`),
-            } : undefined,
-            duration: 8000,
-          });
+
+          if (isInfo) {
+            playNotificationSound("info");
+            toast.info(title, {
+              description: alert.message,
+              action: alert.delivery_id ? {
+                label: "Lacak",
+                onClick: () => router.push(`/pengiriman/tracking/${alert.delivery_id}`),
+              } : undefined,
+              duration: 8000,
+            });
+          } else {
+            playNotificationSound("error");
+            toast.error(title, {
+              description: alert.message,
+              action: alert.delivery_id ? {
+                label: "Lacak",
+                onClick: () => router.push(`/pengiriman/tracking/${alert.delivery_id}`),
+              } : undefined,
+              duration: 8000,
+            });
+          }
         }
       });
     }

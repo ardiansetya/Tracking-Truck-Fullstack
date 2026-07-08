@@ -2,6 +2,7 @@ import { AuthProvider } from "@/context/AuthContext";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import "./global.css";
+import "@/services/backgroundLocationService";
 
 const queryClient = new QueryClient();
 

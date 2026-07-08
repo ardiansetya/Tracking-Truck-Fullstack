@@ -34,29 +34,29 @@ export default function TransitFilters({
   table,
 }: TransitFiltersProps) {
   return (
-    <TechCard title="Status Serah Terima" subtitle="Pencarian Lokasi Transit" icon={<Terminal className="h-4 w-4" />}>
+    <TechCard title="Pencarian & Filter" subtitle="Cari titik singgah driver" icon={<Terminal className="h-4 w-4" />}>
       <div className="space-y-6 pt-2">
         {/* Search & Column Visibility */}
         <div className="flex flex-col lg:flex-row gap-6">
           <div className="relative flex-1 group">
              <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-2 text-muted-foreground group-focus-within:text-primary transition-colors">
-              <Search className="h-4 w-4" />
-              <div className="w-[1px] h-4 bg-border/50" />
-            </div>
-            <input
-              type="text"
-              placeholder="Cari berdasarkan ID Titik, Kelas Kargo, atau Lokasi..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-12 pr-4 h-11 rounded-xl border border-border/50 bg-secondary/20 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary/40 font-mono text-sm tracking-tighter transition-all"
-            />
+               <Search className="h-4 w-4" />
+               <div className="w-[1px] h-4 bg-border/50" />
+             </div>
+             <input
+               type="text"
+               placeholder="Cari berdasarkan ID, tipe kargo, atau nama kota..."
+               value={searchQuery}
+               onChange={(e) => setSearchQuery(e.target.value)}
+               className="w-full pl-12 pr-4 h-11 rounded-xl border border-border/50 bg-secondary/20 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary/40 font-mono text-sm tracking-tighter transition-all"
+             />
           </div>
           
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="h-11 px-6 rounded-xl border-border/50 bg-secondary/10 hover:bg-secondary/30 gap-2 font-mono text-[10px] uppercase tracking-widest transition-all">
                 <Columns className="h-4 w-4" />
-                Konfigurasi Tabel
+                Kolom Tabel
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56 p-2 rounded-xl border-border bg-popover/90 backdrop-blur-xl">
@@ -82,7 +82,7 @@ export default function TransitFilters({
           <div className="flex flex-col md:flex-row md:items-center gap-4 py-3 px-4 bg-secondary/10 rounded-xl border border-border/40">
             <div className="flex items-center gap-2 text-[10px] font-mono font-bold text-muted-foreground/80 uppercase tracking-[0.2em]">
               <Filter className="h-3 w-3 text-primary" />
-              Ketersediaan Pos:
+              Status Titik Singgah:
             </div>
             <div className="flex p-1 bg-background/50 rounded-lg border border-border/30">
               {[
@@ -91,7 +91,7 @@ export default function TransitFilters({
                 { id: "inactive", label: "Tidak Aktif" },
               ].map((s) => (
                 <button
-                  key={s.id}
+                   key={s.id}
                   onClick={() => setFilterActive(s.id as any)}
                   className={cn(
                     "px-4 py-1.5 text-[9px] font-display uppercase tracking-widest rounded-md transition-all",
@@ -109,7 +109,7 @@ export default function TransitFilters({
           <div className="flex flex-col md:flex-row md:items-center gap-4 py-3 px-4 bg-secondary/10 rounded-xl border border-border/40">
             <div className="flex items-center gap-2 text-[10px] font-mono font-bold text-muted-foreground/80 uppercase tracking-[0.2em]">
               <Package className="h-3 w-3 text-primary" />
-              Kelas Transfer:
+              Pilih Tipe Kargo:
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <Button

@@ -69,6 +69,9 @@ public class DeliveryMonitoringService {
     @Autowired
     private GeoAPI geoAPI;
 
+    @Autowired
+    private jakarta.servlet.http.HttpServletRequest httpRequest;
+
 //
 //
 //    @Scheduled(fixedRate = 300_000)
@@ -186,13 +189,6 @@ public class DeliveryMonitoringService {
         delivery.setStartedAt(Instant.now().getEpochSecond());
         deliveryRepo.save(delivery);
 
-        Position initialPosition = new Position();
-        initialPosition.setDelivery(delivery);
-        initialPosition.setLatitude(request.getLatitude());
-        initialPosition.setLongitude(request.getLongitude());
-        initialPosition.setRecordedAt(Instant.now().getEpochSecond());
-        positionRepo.save(initialPosition);
-
         return "Delivery created successfully with ID: " + delivery.getId();
     }
 
@@ -218,11 +214,31 @@ public class DeliveryMonitoringService {
         Delivery delivery = deliveryRepo.findByWorkerUsernameAndFinishedAtIsNull(username)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Delivery has already finished. Position can't be add"));
 
+        // Sync demo mode status
+        String demoHeader = httpRequest != null ? httpRequest.getHeader("X-Demo-Mode") : null;
+        if (demoHeader != null) {
+            delivery.setIsDemo("true".equalsIgnoreCase(demoHeader));
+            deliveryRepo.save(delivery);
+        }
+
         Position position = new Position();
         position.setDelivery(delivery);
         position.setLatitude(request.getLatitude());
         position.setLongitude(request.getLongitude());
         position.setRecordedAt(Instant.now().getEpochSecond());
+
+        // Reverse geocode and save address on save!
+        try {
+            LocationIQResponse apiRes = geoAPI.reverseGeocode(request.getLatitude(), request.getLongitude());
+            position.setName(apiRes.getDisplayName());
+            position.setFormattedAddress(apiRes.getDisplayName());
+            position.setCity(apiRes.getAddress() != null ? apiRes.getAddress().getCity() : null);
+            position.setState(apiRes.getAddress() != null ? apiRes.getAddress().getState() : null);
+            position.setCountry(apiRes.getAddress() != null ? apiRes.getAddress().getCountry() : null);
+        } catch (Exception e) {
+            System.err.println("Gagal reverse geocode saat menyimpan posisi: " + e.getMessage());
+        }
+
         positionRepo.save(position);
 
         return "Position recorded successfully for delivery ID: " + delivery.getId();
@@ -242,19 +258,35 @@ public class DeliveryMonitoringService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No position data found for this delivery");
         }
 
-        // INI HIT API YA BROWW
-        LocationIQResponse apiRes = geoAPI.reverseGeocode(lastPosition.getLatitude(), lastPosition.getLongitude());
+        String name = lastPosition.getName();
+        String formattedAddress = lastPosition.getFormattedAddress();
+        String city = lastPosition.getCity();
+        String state = lastPosition.getState();
+        String country = lastPosition.getCountry();
 
-        // MAPPING from api response to DTO
+        // Fallback to LocationIQ API only if stored address is missing
+        if (name == null) {
+            try {
+                LocationIQResponse apiRes = geoAPI.reverseGeocode(lastPosition.getLatitude(), lastPosition.getLongitude());
+                name = apiRes.getDisplayName();
+                formattedAddress = apiRes.getDisplayName();
+                city = apiRes.getAddress() != null ? apiRes.getAddress().getCity() : null;
+                state = apiRes.getAddress() != null ? apiRes.getAddress().getState() : null;
+                country = apiRes.getAddress() != null ? apiRes.getAddress().getCountry() : null;
+            } catch (Exception e) {
+                System.err.println("Gagal reverse geocode fallback: " + e.getMessage());
+            }
+        }
+
         return PositionGeoResponse.builder()
                 .latitude(lastPosition.getLatitude())
                 .longitude(lastPosition.getLongitude())
-                .name(apiRes.getDisplayName())
-                .formatedAddress(apiRes.getDisplayName())
-                .city(apiRes.getAddress() != null ? apiRes.getAddress().getCity() : null)
-                .state(apiRes.getAddress() != null ? apiRes.getAddress().getState() : null)
-                .country(apiRes.getAddress() != null ? apiRes.getAddress().getCountry() : null)
-                .plusCode(null) // LocationIQ usually doesn't provide plus_code in standard reverse
+                .name(name)
+                .formatedAddress(formattedAddress)
+                .city(city)
+                .state(state)
+                .country(country)
+                .plusCode(null)
                 .recordedAt(lastPosition.getRecordedAt())
                 .build();
     }
@@ -265,6 +297,13 @@ public class DeliveryMonitoringService {
     public DeliveryDetailResponse getDeliveryDetail(String username) {
         Delivery delivery = deliveryRepo.findByWorkerUsernameAndFinishedAtIsNull(username)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "right now you don't have any active delivery"));
+
+        // Sync demo mode status
+        String demoHeader = httpRequest != null ? httpRequest.getHeader("X-Demo-Mode") : null;
+        if (demoHeader != null) {
+            delivery.setIsDemo("true".equalsIgnoreCase(demoHeader));
+            deliveryRepo.save(delivery);
+        }
 
         // Mapping alerts
         List<DeliveryAlertDTO> deliveryAlertDTOs = new ArrayList<>();
@@ -280,6 +319,7 @@ public class DeliveryMonitoringService {
                 deliveryAlertDTO.setDeliveryId(delivery.getId());
                 deliveryAlertDTOs.add(deliveryAlertDTO);
             }
+            deliveryAlertDTOs.sort((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()));
         }
 
         // Mapping transits
@@ -352,6 +392,7 @@ public class DeliveryMonitoringService {
                             .endCityName(delivery.getRoute().getEndCity().getName())
                             .startedAt(delivery.getStartedAt())
                             .addByOperatorId(delivery.getAddByOperatorId().getId())
+                            .isResting(delivery.getIsResting())
                             .build();
                 })
                 .toList();
@@ -374,34 +415,48 @@ public class DeliveryMonitoringService {
                 .endCityName(activeDeliveries.getRoute().getEndCity().getName())
                 .startedAt(activeDeliveries.getStartedAt())
                 .addByOperatorId(activeDeliveries.getAddByOperatorId().getId())
+                .isResting(activeDeliveries.getIsResting())
                 .build();
     }
 
 
-        // get all position of a
+    // get all position of a
     // get /delivery/position
     public List<PositionGeoResponse> getPositions(String deliveryId) {
-
         List<Position> positions = positionRepo.findAllByDeliveryIdOrderByRecordedAtDesc(deliveryId);
+        List<PositionGeoResponse> responses = new ArrayList<>();
 
-        //SEND ALL
-        List<LocationIQResponse> batches = geoAPI.reverseGeocodeBatch(positions);
-
-        //DO MAPPING
-        List<PositionGeoResponse> responses = new ArrayList<>(batches.size());
-        for (int i = 0; i < batches.size(); i++) {
+        for (int i = 0; i < positions.size(); i++) {
             Position position = positions.get(i);
-            LocationIQResponse batch = batches.get(i);
+            
+            String name = position.getName();
+            String formattedAddress = position.getFormattedAddress();
+            String city = position.getCity();
+            String state = position.getState();
+            String country = position.getCountry();
 
-            // MAPPING from api response to DTO
+            // Fallback: Geocode only the latest position (index 0) if stored values are null
+            if (name == null && i == 0) {
+                try {
+                    LocationIQResponse batch = geoAPI.reverseGeocode(position.getLatitude(), position.getLongitude());
+                    name = batch.getDisplayName();
+                    formattedAddress = batch.getDisplayName();
+                    city = batch.getAddress() != null ? batch.getAddress().getCity() : null;
+                    state = batch.getAddress() != null ? batch.getAddress().getState() : null;
+                    country = batch.getAddress() != null ? batch.getAddress().getCountry() : null;
+                } catch (Exception e) {
+                    System.err.println("Gagal reverse geocode posisi terbaru: " + e.getMessage());
+                }
+            }
+
             PositionGeoResponse response = PositionGeoResponse.builder()
                     .latitude(position.getLatitude())
                     .longitude(position.getLongitude())
-                    .name(batch.getDisplayName())
-                    .formatedAddress(batch.getDisplayName())
-                    .city(batch.getAddress() != null ? batch.getAddress().getCity() : null)
-                    .state(batch.getAddress() != null ? batch.getAddress().getState() : null)
-                    .country(batch.getAddress() != null ? batch.getAddress().getCountry() : null)
+                    .name(name)
+                    .formatedAddress(formattedAddress)
+                    .city(city)
+                    .state(state)
+                    .country(country)
                     .plusCode(null)
                     .recordedAt(position.getRecordedAt())
                     .build();
@@ -410,7 +465,6 @@ public class DeliveryMonitoringService {
         }
 
         return responses;
-
     }
 
     // get last deliveries position
@@ -473,6 +527,7 @@ public class DeliveryMonitoringService {
                 deliveryAlertDTO.setDeliveryId(delivery.getId());
                 deliveryAlertDTOs.add(deliveryAlertDTO);
             }
+            deliveryAlertDTOs.sort((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()));
         }
 
         // Mapping transits
@@ -824,6 +879,41 @@ public class DeliveryMonitoringService {
                         .deliveryId(alert.getDelivery().getId())
                         .build())
                 .toList();
+    }
+
+    /**
+     * Toggle rest mode for the authenticated driver's active delivery.
+     * If isResting becomes true, saves a REST_START alert.
+     * If isResting becomes false, saves a REST_END alert.
+     */
+    @Transactional
+    public Boolean toggleRestMode(String driverUsername) {
+        User driver = workerRepo.findByUsernameAndDeletedAtIsNull(driverUsername)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Driver not found"));
+
+        Delivery delivery = deliveryRepo.findByWorkerUsernameAndFinishedAtIsNull(driverUsername)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No active delivery found for this driver"));
+
+        boolean newRestState = !delivery.getIsResting();
+        delivery.setIsResting(newRestState);
+        deliveryRepo.save(delivery);
+
+        // Save an alert log for the admin
+        DeliverAlert alert = new DeliverAlert();
+        alert.setDelivery(delivery);
+        alert.setSender(driver);
+        alert.setCreatedAt(Instant.now().getEpochSecond());
+
+        if (newRestState) {
+            alert.setType(com.koriebruh.be.entity.Enum.DeliverAlertType.REST_START);
+            alert.setMessage("Driver mulai istirahat.");
+        } else {
+            alert.setType(com.koriebruh.be.entity.Enum.DeliverAlertType.REST_END);
+            alert.setMessage("Driver selesai istirahat, melanjutkan perjalanan.");
+        }
+        deliverAlertRepo.save(alert);
+
+        return newRestState;
     }
 
 }

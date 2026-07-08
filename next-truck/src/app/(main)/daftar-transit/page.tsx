@@ -138,8 +138,8 @@ export default function TransitPointListPage() {
       <div className="space-y-8">
         <MotionWrapper delay={0.3}>
           <BentoCard
-            title="Filter & Cari"
-            subtitle="Cari titik transit"
+            title="Cari & Saring"
+            subtitle="Temukan titik singgah driver"
             icon={<Database className="h-5 w-5" />}
           >
             <div className="pt-2">
@@ -161,7 +161,7 @@ export default function TransitPointListPage() {
         <div className="space-y-6">
            <div className="flex items-center gap-4">
             <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest whitespace-nowrap">
-              Transit Ditemukan ({filteredData.length})
+              Lokasi Singgah Ditemukan ({filteredData.length})
             </span>
             <div className="h-[1px] flex-1 bg-border/40" />
             <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground/30 uppercase tracking-[0.2em]">

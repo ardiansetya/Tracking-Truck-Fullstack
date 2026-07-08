@@ -364,5 +364,24 @@ public class DeliveryMonitoringController {
         );
     }
 
+    /**
+     * Driver toggles their rest mode
+     * POST /api/delivery/rest/toggle
+     */
+    @PostMapping(value = "/rest/toggle",
+            produces = "application/json"
+    )
+    public ResponseEntity<WebResponse<Boolean>> toggleRestMode() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        String driverUsername = authentication.getName();
+
+        Boolean isResting = deliveryMonitoringService.toggleRestMode(driverUsername);
+        return ResponseEntity.ok(
+                WebResponse.<Boolean>builder()
+                        .status("OK")
+                        .data(isResting)
+                        .build()
+        );
+    }
 
 }

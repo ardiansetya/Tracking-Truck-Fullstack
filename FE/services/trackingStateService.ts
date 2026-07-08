@@ -136,7 +136,7 @@ export class TrackingStateService {
    */
   static getDefaultConfig(): TrackingConfig {
     return {
-      interval: 900000, // 15 minutes
+      interval: 60000, // 60 seconds
       distanceInterval: 100, // 100 meters
     };
   }

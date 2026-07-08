@@ -1,23 +1,19 @@
 // hooks/usePositionTracker.ts
-import { useMutation } from "@tanstack/react-query";
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useLocation, LocationData } from "./useLocation";
-import api from "@/services/axios";
 import { BackgroundLocationService } from "@/services/backgroundLocationService";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { DeviceEventEmitter } from "react-native";
 import * as Location from 'expo-location';
-
-interface PositionPayload {
-  latitude: number;
-  longitude: number;
-  recorded_at: number; // Unix timestamp
-}
 
 interface UsePositionTrackerOptions {
   autoTrack?: boolean; // Automatically start tracking when component mounts
   interval?: number; // Interval in milliseconds to send position updates
-  useBackgroundTracking?: boolean; // Use background location service (works even when app is closed)
-  distanceInterval?: number; // Distance in meters to trigger update (for background tracking)
+  restInterval?: number; // Interval when resting (default 5 min) — slower but still tracked
+  useBackgroundTracking?: boolean; // Use background location service
+  distanceInterval?: number; // Distance in meters to trigger update
   deliveryId?: string; // Active delivery ID to send alerts for
+  isResting?: boolean; // Reduce sending frequency when driver is in rest mode
 }
 
 interface UsePositionTrackerReturn {
@@ -30,6 +26,7 @@ interface UsePositionTrackerReturn {
   sendPositionError: string | null;
   lastSentAt: Date | null;
   isMocked: boolean;
+  isResting: boolean;
   hasBackgroundPermission: boolean;
   startTracking: () => void;
   stopTracking: () => void;
@@ -39,268 +36,80 @@ interface UsePositionTrackerReturn {
   checkBackgroundPermissions: () => Promise<void>;
 }
 
-// API function to send position
-const sendPositionToAPI = async (position: PositionPayload): Promise<any> => {
-  const response = await api.post("/api/delivery/position", position);
-
-  if (response.status !== 200) {
-    throw new Error(`Failed to send position: ${response.status}`);
-  }
-
-  return response.data;
-};
-
 export const usePositionTracker = (
   options: UsePositionTrackerOptions = {}
 ): UsePositionTrackerReturn => {
   const {
     autoTrack = false,
-    interval = 900000,
-    useBackgroundTracking = false,
-    distanceInterval = 100,
-    deliveryId
-  } = options; // Default 15 minutes
+    interval = 60000,
+    restInterval = 300000, // 5 minutes default when resting
+    deliveryId,
+    isResting = false,
+  } = options;
+
+  // Active interval: use restInterval when resting, normal interval otherwise
+  const activeInterval = isResting ? restInterval : interval;
+
+  useEffect(() => {
+    AsyncStorage.setItem('active_interval', String(activeInterval)).catch(err => console.error(err));
+  }, [activeInterval]);
 
   const [isTracking, setIsTracking] = useState(false);
-  const [isBackgroundTracking, setIsBackgroundTracking] = useState(false);
   const [hasBackgroundPermission, setHasBackgroundPermission] = useState(false);
   const [lastSentAt, setLastSentAt] = useState<Date | null>(null);
-  const intervalRef = useRef<NodeJS.Timeout | number | null>(null);
-  const locationRef = useRef<LocationData | null>(null); // Keep location in ref for immediate access
-  const hasSentFakeGpsAlert = useRef(false);
+  const [isSending, setIsSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+
+  const isTrackingRef = useRef(false);
+
+  // Sync active deliveryId and isResting state to AsyncStorage for Background Task callback
+  useEffect(() => {
+    if (deliveryId) {
+      AsyncStorage.setItem('active_delivery_id', deliveryId).catch(err => console.error(err));
+    } else {
+      AsyncStorage.removeItem('active_delivery_id').catch(err => console.error(err));
+    }
+  }, [deliveryId]);
+
+  useEffect(() => {
+    AsyncStorage.setItem('is_resting', isResting ? 'true' : 'false').catch(err => console.error(err));
+  }, [isResting]);
 
   const {
     location,
     isLoading: isLoadingLocation,
     error: locationError,
-    isMocked, // 👈 dari useLocation
+    isMocked,
     startWatchingLocation,
     stopWatchingLocation,
-    getCurrentLocation,
   } = useLocation();
 
-  // Update location ref whenever location changes
+  // Listen to background task events to sync UI state
   useEffect(() => {
-    if (location) {
-      locationRef.current = location;
-      console.log("📍 Location ref updated:", location);
-    }
-  }, [location]);
+    const sendingSub = DeviceEventEmitter.addListener('position-sending', () => {
+      setIsSending(true);
+      setSendError(null);
+    });
 
-  // Mutation for sending position to API
-  const sendPositionMutation = useMutation({
-    mutationFn: sendPositionToAPI,
-    onSuccess: (data) => {
-      setLastSentAt(new Date());
-      console.log("✅ Position sent successfully:", data);
-    },
-    onError: (error: Error) => {
-      console.error("❌ Failed to send position:", error.message);
-    },
-  });
+    const sentSub = DeviceEventEmitter.addListener('position-sent', (event) => {
+      setIsSending(false);
+      setLastSentAt(event.lastSentAt ? new Date(event.lastSentAt) : new Date());
+      setSendError(null);
+    });
 
-  // Get current location with timeout
-  const getLocationWithTimeout = useCallback(
-    async (timeoutMs: number = 5000): Promise<LocationData | null> => {
-      console.log("📍 Getting location with timeout:", timeoutMs, "ms");
+    const errorSub = DeviceEventEmitter.addListener('position-send-error', (event) => {
+      setIsSending(false);
+      setSendError(event.error || "Gagal mengirim lokasi");
+    });
 
-      if (locationRef.current) {
-        console.log("✅ Using cached location from ref");
-        return locationRef.current;
-      }
-
-      try {
-        await getCurrentLocation();
-
-        const startTime = Date.now();
-        while (!locationRef.current && Date.now() - startTime < timeoutMs) {
-          await new Promise((resolve) => setTimeout(resolve, 100));
-        }
-
-        return locationRef.current;
-      } catch (error) {
-        console.error("❌ Failed to get location:", error);
-        return null;
-      }
-    },
-    [getCurrentLocation]
-  );
-
-  // Send position with robust location handling
-  const sendPositionRobust = useCallback(async (): Promise<boolean> => {
-    console.log("🔄 Attempting to send position...");
-
-    const currentLocation = await getLocationWithTimeout(3000);
-
-    if (!currentLocation) {
-      console.log("❌ No location available after timeout, skipping send");
-      return false;
-    }
-
-    if (currentLocation.mocked) {
-      console.log("🚫 Fake GPS detected, skipping send");
-      if (deliveryId && !hasSentFakeGpsAlert.current) {
-        hasSentFakeGpsAlert.current = true;
-        api.post("/api/delivery/alert/send", {
-          type: "FAKE_GPS",
-          message: "Driver terdeteksi menggunakan aplikasi Fake GPS (Lokasi Palsu)!",
-          delivery_id: deliveryId
-        }).then(() => {
-          console.log("🚨 FAKE_GPS Alert sent to backend successfully!");
-        }).catch((err) => {
-          console.error("❌ Failed to send FAKE_GPS Alert to backend:", err);
-          hasSentFakeGpsAlert.current = false; // Allow retry on next interval
-        });
-      }
-      return false;
-    } else {
-      // Reset state if driver turns off Fake GPS, so we alert again if re-enabled
-      hasSentFakeGpsAlert.current = false;
-    }
-
-    try {
-      const payload: PositionPayload = {
-        latitude: currentLocation.latitude,
-        longitude: currentLocation.longitude,
-        recorded_at: Math.floor(Date.now() / 1000),
-      };
-
-      console.log("📤 Sending position:", payload);
-      await sendPositionMutation.mutateAsync(payload);
-      console.log("✅ Position sent successfully!");
-      return true;
-    } catch (error) {
-      console.error("❌ Failed to send position:", error);
-      return false;
-    }
-  }, [getLocationWithTimeout, sendPositionMutation]);
-
-  // Send current position (for external use)
-  const sendCurrentPosition = useCallback(async (): Promise<void> => {
-    const success = await sendPositionRobust();
-    if (!success) {
-      throw new Error("Failed to send position");
-    }
-  }, [sendPositionRobust]);
-
-  // Interval function for automatic sending
-  const intervalSendPosition = useCallback(async () => {
-    console.log("⏰ Interval triggered - attempting automatic send");
-    await sendPositionRobust();
-  }, [sendPositionRobust]);
-
-  // Start tracking
-  const startTracking = useCallback(async () => {
-    if (isTracking) {
-      console.log("⚠️ Already tracking, skipping start");
-      return;
-    }
-
-    console.log("🚀 Starting automatic position tracking...");
-    console.log("📊 Interval:", interval, "ms (", interval / 60000, "minutes)");
-    setIsTracking(true);
-
-    try {
-      await startWatchingLocation();
-      console.log("📍 Location watching started");
-
-      const initialSuccess = await sendPositionRobust();
-
-      if (initialSuccess) {
-        console.log("✅ Initial position sent successfully");
-      } else {
-        console.log("⚠️ Initial send failed, will retry in first interval");
-      }
-
-      intervalRef.current = setInterval(intervalSendPosition, interval);
-      console.log("✅ Automatic sending interval set up");
-    } catch (error) {
-      console.error("❌ Failed to start tracking:", error);
-      setIsTracking(false);
-    }
-  }, [
-    isTracking,
-    interval,
-    startWatchingLocation,
-    sendPositionRobust,
-    intervalSendPosition,
-  ]);
-
-  // Stop tracking
-  const stopTracking = useCallback(() => {
-    if (!isTracking) {
-      console.log("⚠️ Not tracking, skipping stop");
-      return;
-    }
-
-    console.log("🛑 Stopping position tracking...");
-    setIsTracking(false);
-
-    stopWatchingLocation();
-
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-      console.log("✅ Interval cleared");
-    }
-  }, [isTracking, stopWatchingLocation]);
-
-  // Restart interval when interval value changes
-  useEffect(() => {
-    if (isTracking && intervalRef.current) {
-      console.log("🔄 Interval changed, restarting tracker interval to:", interval, "ms");
-      clearInterval(intervalRef.current as number);
-      intervalRef.current = setInterval(intervalSendPosition, interval);
-    }
-  }, [interval, isTracking, intervalSendPosition]);
-
-  // Start background tracking
-  const startBackgroundTracking = useCallback(async (): Promise<boolean> => {
-    console.log("🚀 Starting background location tracking...");
-
-    try {
-      const success = await BackgroundLocationService.start({
-        accuracy: Location.Accuracy.High,
-        timeInterval: interval,
-        distanceInterval: distanceInterval,
-      });
-
-      if (success) {
-        setIsBackgroundTracking(true);
-        console.log("✅ Background tracking started successfully");
-        return true;
-      } else {
-        console.error("❌ Failed to start background tracking");
-        return false;
-      }
-    } catch (error) {
-      console.error("❌ Error starting background tracking:", error);
-      return false;
-    }
-  }, [interval, distanceInterval]);
-
-  // Stop background tracking
-  const stopBackgroundTracking = useCallback(async (): Promise<boolean> => {
-    console.log("🛑 Stopping background location tracking...");
-
-    try {
-      const success = await BackgroundLocationService.stop();
-
-      if (success) {
-        setIsBackgroundTracking(false);
-        console.log("✅ Background tracking stopped successfully");
-        return true;
-      } else {
-        console.log("⚠️ Background tracking was not running");
-        return false;
-      }
-    } catch (error) {
-      console.error("❌ Error stopping background tracking:", error);
-      return false;
-    }
+    return () => {
+      sendingSub.remove();
+      sentSub.remove();
+      errorSub.remove();
+    };
   }, []);
 
-  // Check background permissions
+  // Check background permissions status
   const checkBackgroundPermissions = useCallback(async () => {
     try {
       const permissions = await BackgroundLocationService.checkPermissions();
@@ -309,14 +118,8 @@ export const usePositionTracker = (
         permissions.background === 'granted';
 
       setHasBackgroundPermission(hasPermission);
-
-      console.log("📋 Background permissions:", {
-        foreground: permissions.foreground,
-        background: permissions.background,
-        hasFullAccess: hasPermission,
-      });
     } catch (error) {
-      console.error("❌ Error checking permissions:", error);
+      console.error("❌ Error checking background permissions:", error);
       setHasBackgroundPermission(false);
     }
   }, []);
@@ -326,90 +129,116 @@ export const usePositionTracker = (
     checkBackgroundPermissions();
   }, [checkBackgroundPermissions]);
 
-  // Check if background tracking is running on mount
+  // Sync running status on mount
   useEffect(() => {
-    const checkBackgroundStatus = async () => {
-      const isRunning = await BackgroundLocationService.isRunning();
-      setIsBackgroundTracking(isRunning);
-      console.log("📊 Background tracking status on mount:", isRunning);
+    const syncStatus = async () => {
+      const running = await BackgroundLocationService.isRunning();
+      setIsTracking(running);
+      isTrackingRef.current = running;
     };
-
-    checkBackgroundStatus();
+    syncStatus();
   }, []);
 
-  const startTrackingRef = useRef(startTracking);
-  const stopTrackingRef = useRef(stopTracking);
-  const startBackgroundTrackingRef = useRef(startBackgroundTracking);
-  const stopBackgroundTrackingRef = useRef(stopBackgroundTracking);
-
-  useEffect(() => {
-    startTrackingRef.current = startTracking;
-    stopTrackingRef.current = stopTracking;
-    startBackgroundTrackingRef.current = startBackgroundTracking;
-    stopBackgroundTrackingRef.current = stopBackgroundTracking;
-  });
-
-  // Auto-start tracking
-  useEffect(() => {
-    let timerId: NodeJS.Timeout | null = null;
-
-    if (autoTrack) {
-      console.log("🚀 Auto-starting position tracking...");
-      timerId = setTimeout(async () => {
-        if (useBackgroundTracking) {
-          console.log("📱 Using background tracking mode");
-          await startBackgroundTrackingRef.current();
-        } else {
-          console.log("📱 Using foreground tracking mode");
-          await startTrackingRef.current();
-        }
-      }, 1000);
-    } else {
-      console.log("🛑 Stopping position tracking (autoTrack is false)...");
-      if (useBackgroundTracking) {
-        stopBackgroundTrackingRef.current();
-      } else {
-        stopTrackingRef.current();
-      }
+  // Start tracking via background location task
+  const startTracking = useCallback(async () => {
+    if (isTrackingRef.current) {
+      console.log("⚠️ Already tracking, skipping start");
+      return;
     }
 
-    return () => {
-      console.log("🧹 Cleanup: stopping tracking");
-      if (timerId) {
-        clearTimeout(timerId);
-      }
-      if (useBackgroundTracking) {
-        stopBackgroundTrackingRef.current();
-      } else {
-        stopTrackingRef.current();
-      }
-    };
-  }, [autoTrack, useBackgroundTracking]);
+    console.log("🚀 Starting background location tracking task...");
+    console.log("📊 Interval:", activeInterval, "ms");
 
-  useEffect(() => {
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
+    try {
+      // 1. Start watching location locally for UI/map display
+      await startWatchingLocation();
+
+      // 2. Start global background task with the current interval config
+      const success = await BackgroundLocationService.start({
+        accuracy: Location.Accuracy.Balanced,
+        timeInterval: activeInterval,
+        forceRestart: true,
+      });
+
+      if (success) {
+        setIsTracking(true);
+        isTrackingRef.current = true;
       }
-    };
+    } catch (error) {
+      console.error("❌ Failed to start tracking:", error);
+      setIsTracking(false);
+      isTrackingRef.current = false;
+    }
+  }, [activeInterval, startWatchingLocation]);
+
+  // Stop tracking
+  const stopTracking = useCallback(async () => {
+    if (!isTrackingRef.current) {
+      console.log("⚠️ Not tracking, skipping stop");
+      return;
+    }
+
+    console.log("🛑 Stopping background location tracking task...");
+    try {
+      stopWatchingLocation();
+      await BackgroundLocationService.stop();
+    } catch (error) {
+      console.error("❌ Error during tracking stop:", error);
+    } finally {
+      setIsTracking(false);
+      isTrackingRef.current = false;
+    }
+  }, [stopWatchingLocation]);
+
+  // Handle activeInterval changes (restarting the background service with new interval)
+  useEffect(() => {
+    if (isTrackingRef.current) {
+      console.log("🔄 activeInterval changed to:", activeInterval, "ms — reconfiguring background service");
+      BackgroundLocationService.start({
+        accuracy: Location.Accuracy.Balanced,
+        timeInterval: activeInterval,
+        forceRestart: true,
+      }).catch(err => console.error("❌ Failed to reconfigure interval:", err));
+    }
+  }, [activeInterval]);
+
+  // Force single immediate location update
+  const sendCurrentPosition = useCallback(async (): Promise<void> => {
+    const success = await BackgroundLocationService.sendSingleUpdate();
+    if (!success) {
+      throw new Error("Gagal mengirim lokasi saat ini");
+    }
   }, []);
+
+  // Auto-start / Auto-stop based on autoTrack option
+  useEffect(() => {
+    if (autoTrack) {
+      const timer = setTimeout(() => {
+        startTracking();
+      }, 1000);
+      return () => clearTimeout(timer);
+    } else {
+      stopTracking();
+    }
+  }, [autoTrack, startTracking, stopTracking]);
 
   return {
     isTracking,
-    isBackgroundTracking,
+    isBackgroundTracking: isTracking, // Both represent background task running
     location,
     isLoadingLocation,
     locationError,
-    isMocked, // 👈 expose biar bisa dipakai di UI
+    isMocked,
+    isResting,
     hasBackgroundPermission,
-    isSendingPosition: sendPositionMutation.isPending,
-    sendPositionError: sendPositionMutation.error?.message || null,
+    isSendingPosition: isSending,
+    sendPositionError: sendError,
     lastSentAt,
     startTracking,
     stopTracking,
     sendCurrentPosition,
-    startBackgroundTracking,
-    stopBackgroundTracking,
+    startBackgroundTracking: async () => { await startTracking(); return true; },
+    stopBackgroundTracking: async () => { await stopTracking(); return true; },
     checkBackgroundPermissions,
   };
 };

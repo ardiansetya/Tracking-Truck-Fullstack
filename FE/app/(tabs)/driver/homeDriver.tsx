@@ -1,28 +1,29 @@
-import React, { useEffect, useState } from "react";
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
 import DeliveryCard from "@/components/DeliveryCard";
+import { useDeliveryByWorker, useToggleRestMode } from "@/hooks/useDelivery";
+import { usePositionTracker } from "@/hooks/usePositionTracker";
+import { useProfile } from "@/hooks/useProfile";
+import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useRouter } from "expo-router";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   RefreshControl,
   ScrollView,
   StatusBar,
+  Switch,
   Text,
   TouchableOpacity,
   View,
-  Switch,
 } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useRouter } from "expo-router";
-import { useDeliveryByWorker } from "@/hooks/useDelivery";
-import { useProfile } from "@/hooks/useProfile";
-import { usePositionTracker } from "@/hooks/usePositionTracker";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 
 const DashboardDriver = () => {
+  const toggleRestModeMutation = useToggleRestMode();
   const insets = useSafeAreaInsets();
   const { data: user } = useProfile();
   const worker_id = user?.data.id || "";
@@ -57,7 +58,8 @@ const DashboardDriver = () => {
     }
   };
 
-  const currentInterval = isDemoMode ? 10000 : 900000; // 10 seconds vs 15 minutes
+  const currentInterval = isDemoMode ? 10000 : 60000; // 10 seconds vs 60 seconds
+  const restInterval = isDemoMode ? 30000 : 300000; // 30s demo, 5min normal
 
   const {
     data: deliveriesData,
@@ -77,11 +79,16 @@ const DashboardDriver = () => {
     sendPositionError,
     lastSentAt,
     isMocked,
+    isResting,
   } = usePositionTracker({
     autoTrack: !!deliveriesData?.data, // Auto-start only when there is an active delivery
     interval: currentInterval,
+    restInterval: restInterval,
     deliveryId: deliveriesData?.data?.id, // Pass delivery ID to send Fake GPS alerts
+    isResting: deliveriesData?.data?.is_resting ?? false,
   });
+
+  const activeInterval = isResting ? restInterval : currentInterval;
 
   const router = useRouter();
 
@@ -95,18 +102,20 @@ const DashboardDriver = () => {
     const updateCountdown = () => {
       const now = Date.now();
       const lastSent = lastSentAt.getTime();
-      const nextUpdate = lastSent + currentInterval;
+      const nextUpdate = lastSent + activeInterval;
       const timeLeft = nextUpdate - now;
 
+      const prefix = isResting ? "☕ " : "";
+
       if (timeLeft <= 0) {
-        setNextUpdateCountdown("Sending soon...");
+        setNextUpdateCountdown(`${prefix}Sending soon...`);
       } else {
         const minutes = Math.floor(timeLeft / 60000);
         const seconds = Math.floor((timeLeft % 60000) / 1000);
         if (isDemoMode) {
-          setNextUpdateCountdown(`${seconds}s`);
+          setNextUpdateCountdown(`${prefix}${seconds}s`);
         } else {
-          setNextUpdateCountdown(`${minutes}m ${seconds}s`);
+          setNextUpdateCountdown(`${prefix}${minutes}m ${seconds}s`);
         }
       }
     };
@@ -115,7 +124,7 @@ const DashboardDriver = () => {
     const countdownInterval = setInterval(updateCountdown, 1000);
 
     return () => clearInterval(countdownInterval);
-  }, [isTracking, lastSentAt, currentInterval, isDemoMode]);
+  }, [isTracking, lastSentAt, activeInterval, isDemoMode, isResting]);
 
   // Handle location errors with alert dialog
   useEffect(() => {
@@ -238,6 +247,17 @@ const DashboardDriver = () => {
             </View>
           )}
 
+          {/* Rest Mode Active Banner */}
+          {deliveries?.is_resting && (
+            <View className="bg-amber-100 border border-amber-400 rounded-xl p-3 mb-4 flex-row items-center">
+              <Ionicons name="cafe" size={20} color="#D97706" />
+              <Text className="text-amber-800 font-medium ml-2 flex-1">
+                Mode Istirahat Aktif
+              </Text>
+            </View>
+          )}
+
+
           {/* Status Overview Card */}
           <View className="bg-white rounded-2xl p-4 shadow-sm">
             <View className="flex-row items-center justify-between mb-3">
@@ -342,8 +362,45 @@ const DashboardDriver = () => {
                 </View>
               )}
 
+              {/* Rest Mode Controls */}
+              {deliveries && (
+                <>
+                  <View className="h-[1px] bg-gray-200 my-2" />
+                  <View className="flex-row items-center justify-between py-1">
+                    <View className="flex-row items-center flex-1 pr-2">
+                      <Ionicons
+                        name="cafe"
+                        size={18}
+                        color={deliveries.is_resting ? "#D97706" : "#6B7280"}
+                      />
+                      <View className="ml-2 flex-1">
+                        <Text className="text-xs font-semibold text-gray-700">
+                          Mode Istirahat (transit/bongkar muat)
+                        </Text>
+                        <Text className="text-[10px] text-gray-500">
+                          {deliveries.is_resting
+                            ? "Peringatan truk berhenti dinonaktifkan"
+                            : "Aktifkan ketika berhenti istirahat"}
+                        </Text>
+                      </View>
+                    </View>
+                    {toggleRestModeMutation.isPending ? (
+                      <ActivityIndicator size="small" color="#D97706" style={{ marginRight: 8 }} />
+                    ) : (
+                      <Switch
+                        value={deliveries.is_resting ?? false}
+                        onValueChange={() => toggleRestModeMutation.mutate()}
+                        trackColor={{ false: "#D1D5DB", true: "#FDE68A" }}
+                        thumbColor={deliveries.is_resting ? "#D97706" : "#F9FAFB"}
+                        style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+                      />
+                    )}
+                  </View>
+                </>
+              )}
+
               {/* Divider */}
-              <View className="h-[1px] bg-gray-150 my-2" />
+              <View className="h-[1px] bg-gray-200 my-2" />
 
               {/* Demo Mode Toggle */}
               <View className="flex-row items-center justify-between mt-1">
