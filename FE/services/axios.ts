@@ -85,30 +85,24 @@ api.interceptors.response.use(
       console.log(`[${getTimestamp()}] ⚠️ [TOKEN REFRESH] 401 Unauthorized detected, attempting token refresh...`);
 
       try {
+        let newToken: string | null = null;
         if (refresh_tokenPromise) {
           console.log(`[${getTimestamp()}] 🔄 [TOKEN REFRESH] Refresh already in progress, waiting...`);
-          const newToken = await refresh_tokenPromise;
-          if (newToken && originalRequest.headers) {
-            originalRequest.headers.Authorization = `Bearer ${newToken}`;
-            console.log(`[${getTimestamp()}] ✅ [TOKEN REFRESH] Retry with refreshed token successful`);
-            return api(originalRequest);
-          }
+          newToken = await refresh_tokenPromise;
         } else {
           console.log(`[${getTimestamp()}] 🔄 [TOKEN REFRESH] Starting refresh process...`);
           refresh_tokenPromise = refreshAccessToken();
-          const newToken = await refresh_tokenPromise;
+          newToken = await refresh_tokenPromise;
           refresh_tokenPromise = null;
+        }
 
-          if (newToken && originalRequest.headers) {
-            originalRequest.headers.Authorization = `Bearer ${newToken}`;
-            console.log(`[${getTimestamp()}] ↩️ [TOKEN REFRESH] Retrying original request with new token`);
-            return api(originalRequest);
-          }
+        if (newToken && originalRequest.headers) {
+          originalRequest.headers.Authorization = `Bearer ${newToken}`;
+          console.log(`[${getTimestamp()}] ↩️ [TOKEN REFRESH] Retrying original request with new token`);
+          return api(originalRequest);
         }
       } catch (refreshError) {
-        console.error(`[${getTimestamp()}] ❌ [TOKEN REFRESH] Failed:`, refreshError);
-        await clearTokens();
-        return Promise.reject(refreshError);
+        console.error(`[${getTimestamp()}] ❌ [TOKEN REFRESH] Interceptor error:`, refreshError);
       }
     }
 
@@ -186,9 +180,15 @@ const refreshAccessToken = async (): Promise<string | null> => {
 
     console.log(`[${getTimestamp()}] ✅ [TOKEN REFRESH] Success! Tokens refreshed at ${getTimestamp()}`);
     return access_token;
-  } catch (error) {
+  } catch (error: any) {
     console.error(`[${getTimestamp()}] ❌ [TOKEN REFRESH] Failed:`, error);
-    await clearTokens();
+    // Only clear tokens if the server explicitly rejected the refresh token (400, 401, 403, 404)
+    if (error.response && [400, 401, 403, 404].includes(error.response.status)) {
+      console.warn(`[${getTimestamp()}] 🚨 [TOKEN REFRESH] Invalid token response (${error.response.status}), clearing tokens`);
+      await clearTokens();
+    } else {
+      console.log(`[${getTimestamp()}] ℹ️ [TOKEN REFRESH] Network or server error, keeping tokens for retry`);
+    }
     return null;
   }
 };

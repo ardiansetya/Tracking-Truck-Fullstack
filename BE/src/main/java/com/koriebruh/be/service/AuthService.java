@@ -96,8 +96,8 @@ public class AuthService {
         String demoHeader = httpRequest != null ? httpRequest.getHeader("X-Demo-Mode") : null;
         boolean isDemo = "true".equalsIgnoreCase(demoHeader) || demoMode;
 
-        Long sevenDaysInMillis = isDemo ? 600000L : 604800000L; // 10 minutes vs 7 days in milliseconds
-        Long fifteenMillis = isDemo ? 20000L : 900000L; // 20s vs 15 minutes in milliseconds
+        Long sevenDaysInMillis = isDemo ? 2592000000L : 7776000000L; // 30 days vs 90 days in milliseconds
+        Long fifteenMillis = isDemo ? 1800000L : 900000L; // 30 minutes vs 15 minutes in milliseconds
         String refreshToken;
         try {
             if (user.getRefreshToken() != null && jwtUtil.validateToken(user.getRefreshToken(), user.getUsername())) {
@@ -146,8 +146,8 @@ public class AuthService {
         String demoHeader = httpRequest != null ? httpRequest.getHeader("X-Demo-Mode") : null;
         boolean isDemo = "true".equalsIgnoreCase(demoHeader) || demoMode;
 
-        Long fifteenMillis = isDemo ? 20000L : 900000L; // 20s vs 15 minutes in milliseconds
-        Long sevenDaysInMillis = isDemo ? 600000L : 604800000L; // 10 minutes vs 7 days in milliseconds
+        Long fifteenMillis = isDemo ? 1800000L : 900000L; // 30 minutes vs 15 minutes in milliseconds
+        Long sevenDaysInMillis = isDemo ? 2592000000L : 7776000000L; // 30 days vs 90 days in milliseconds
 
         Optional<User> userOps = userRepository.findByRefreshToken(request.getRefreshToken());
         if (userOps.isEmpty()) {

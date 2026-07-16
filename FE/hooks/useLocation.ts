@@ -51,6 +51,7 @@ export const useLocation = (): UseLocationReturn => {
         return false;
       }
 
+      setError(null);
       return true;
     } catch (err) {
       setError("Failed to request location permission");
@@ -133,6 +134,8 @@ export const useLocation = (): UseLocationReturn => {
 
       if (locationData.mocked) {
         setError("⚠️ Fake GPS terdeteksi!");
+      } else {
+        setError(null);
       }
     } catch (err) {
       setError(
@@ -166,6 +169,8 @@ export const useLocation = (): UseLocationReturn => {
 
           if (locationData.mocked) {
             setError("⚠️ Fake GPS terdeteksi!");
+          } else {
+            setError(null);
           }
         }
       );
